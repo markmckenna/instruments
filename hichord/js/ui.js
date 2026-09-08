@@ -4,7 +4,9 @@
 
 import { CHORD_KEYS, DEGREES, chordRootName } from './theory.js';
 
-const QUALITY_SUFFIX = { maj: '', min: 'm', dim: '°' };
+// Exported so tests can derive an expected chord-name label from the same
+// single source of truth this module renders from, instead of a copy.
+export const QUALITY_SUFFIX = { maj: '', min: 'm', dim: '°' };
 
 export function renderUI({ key, voice, heldBases, heldVariant, loopState }) {
   document.querySelectorAll('[data-base]').forEach((el) => {
