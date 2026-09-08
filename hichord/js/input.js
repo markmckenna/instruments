@@ -149,14 +149,14 @@ window.addEventListener('keydown', (e) => {
     case 'ArrowRight': e.preventDefault(); changeKey(1); break;
     case 'ArrowUp': e.preventDefault(); changeVoice(1); break;
     case 'ArrowDown': e.preventDefault(); changeVoice(-1); break;
-    case 'Tab': e.preventDefault(); toggleRecord(true); break;
+    case 'Space': e.preventDefault(); toggleRecord(true); break;
   }
 });
 
 window.addEventListener('keyup', (e) => {
   if (BASE_CODES.has(e.code)) { e.preventDefault(); releaseBase(e.code); return; }
   if (VARIANT_CODES.has(e.code)) { e.preventDefault(); releaseVariant(e.code); return; }
-  if (e.code === 'Tab') { e.preventDefault(); toggleRecord(false); }
+  if (e.code === 'Space') { e.preventDefault(); toggleRecord(false); }
 });
 
 // Safety valve: if the tab/window loses focus mid-hold (alt-tab, notification,

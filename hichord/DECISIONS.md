@@ -93,19 +93,24 @@ they are below.
 
 ## Loop recorder
 
-- Recording only runs while Tab (or the on-screen record button) is held.
+- Recording only runs while Space (or the on-screen record button) is held.
   Releasing it immediately starts looping whatever was captured, snapped to
-  the nearest beat at the fixed 120bpm the README specifies (minimum length:
-  1 beat) — see "Loop length snaps to the nearest beat" below for why nearest
-  rather than always rounding up. Pressing/holding Tab again starts a *new*
-  recording, replacing the old loop outright (there's no overdub/multi-layer
-  mode here — the README describes one loop, not a layered looper) — and, if
-  a loop was playing, immediately silences it (`stopChord('loop')`) rather
-  than leaving its last-triggered note stuck ringing once the scheduler that
+  the nearest beat at the shared Tempo's bpm (minimum length: 1 beat) — see
+  "Loop length snaps to the nearest beat" below for why nearest rather than
+  always rounding up. Pressing/holding Space again starts a *new* recording,
+  replacing the old loop outright (there's no overdub/multi-layer mode here
+  — the README describes one loop, not a layered looper) — and, if a loop
+  was playing, immediately silences it (`stopChord('loop')`) rather than
+  leaving its last-triggered note stuck ringing once the scheduler that
   would otherwise have released it stops. This is also what makes a quick
-  tap of Tab (no chord held in between) behave as "cancel and clear" the
+  tap of Space (no chord held in between) behave as "cancel and clear" the
   previous loop: nothing gets recorded, so `stopRecording()` lands back on
   `idle`, and the old loop's sound has already been cut.
+  **Space, not Tab**: an earlier version used Tab, which conflicts with
+  browser/OS focus-cycling accessibility features (e.g. macOS's Full
+  Keyboard Access) that can intercept Tab before the page ever sees the
+  keydown at all — silently breaking recording, not just stealing focus.
+  Space doesn't carry that meaning anywhere on this page.
 - If a chord was already sounding at the moment recording starts, that
   chord's notes are captured as the loop's `t=0` state — otherwise a chord
   you were holding before you started recording would silently drop out of
@@ -115,7 +120,7 @@ they are below.
   the loop is playing mixes the two instead of one stealing the other's
   sound — this is what makes it possible to play over top of a running loop.
 - **Recording stopped mid-hold gets a synthetic release at the loop
-  boundary**: if you release Tab while still holding a chord, that chord's
+  boundary**: if you release Space while still holding a chord, that chord's
   `'on'` event has no matching `'off'` within the recording. Without a fix,
   every loop iteration would fire that same `'on'` again while its notes are
   already sounding from the previous iteration (`playChord()` leaves
@@ -236,12 +241,22 @@ they are below.
   time (`_envelopeValueAt`) instead of asking the AudioParam what it thinks
   "now" is.
 - **The metronome click is not a voice**: `AudioEngine.playClick()` is a
-  separate, minimal code path (one plain oscillator, no filter, no per-chord
-  gain normalization, no voice preset) rather than routed through
-  `VOICES`/`playChord` — a click is a short unpitched percussive blip, not a
-  musical note, so none of the chord-voicing machinery (attack/decay/sustain
+  separate, minimal code path rather than routed through `VOICES`/
+  `playChord` — a click is a short unpitched percussive blip, not a musical
+  note, so none of the chord-voicing machinery (attack/decay/sustain
   shaping, chordSize-based level, multi-oscillator detuning) applies or is
   worth reusing here.
+- **The click is a bandpassed noise burst around 10-12kHz, not a low tone**:
+  an earlier version used a single ~90Hz oscillator ("a low click," per the
+  original ask), which turned out to be nearly inaudible on typical
+  speakers — bass that low is exactly what small/laptop speakers reproduce
+  worst, and a pure low tone has no transient edge to read as a "click" in
+  the first place. A short (`CLICK_DURATION`, 20ms) burst of white noise
+  through a bandpass filter centered at 11kHz sits where a percussive click
+  actually needs to be to cut through and be perceived as one. The noise
+  buffer itself is generated once (in `unlock()`) and reused for every
+  click, rather than regenerated per beat, so every click sounds identical
+  rather than subtly re-textured each time.
 
 ## Tempo, click track, and quantize
 
@@ -274,6 +289,18 @@ they are below.
   durations themselves relate) and keeps the control to two buttons.
   Bounded to 1 (whole note) through 1/128, past which either end stops being
   a useful grid.
+- **Same-instant events after quantizing are coalesced, not stacked**:
+  playing faster than the quantize grid resolves (or a coarse enough grid)
+  can quantize two different real moments onto the exact same timestamp.
+  `recordEvent()` replaces the previous event outright when this happens
+  rather than appending both, since `refreshSound()` always records the
+  *complete* current sound rather than a delta — the newer event alone
+  already captures everything that mattered at that instant. Without this,
+  replaying two same-`when` events back to back (`_tick()` fires them in
+  order within a single pass, see Loop recorder above) would attack a note
+  only to have it immediately cancelled by a release, immediately followed
+  by another attack — audible as a garbled flurry instead of the actual end
+  state at that moment.
 - **The click is a free-running practice metronome, independent of loop
   record/playback state**: `Metronome` starts counting beats from whenever
   it's turned on and keeps clicking regardless of whether you're recording,

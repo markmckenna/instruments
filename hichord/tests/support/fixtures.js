@@ -42,6 +42,15 @@ function installAudioProbe() {
     window.__audioEvents.push({ type: 'stop', freq: round(this.frequency.value) });
     return origStop.apply(this, args);
   };
+
+  // AudioBufferSourceNode has no .frequency -- only AudioEngine.playClick()
+  // (the metronome click, a noise burst) uses one in this app, so a 'click'
+  // event unambiguously means a click fired.
+  const origBufferStart = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function (...args) {
+    window.__audioEvents.push({ type: 'click' });
+    return origBufferStart.apply(this, args);
+  };
 }
 
 export const test = base.extend({

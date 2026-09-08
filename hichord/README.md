@@ -31,6 +31,14 @@ No local server handy and just want to peek at the layout? Opening
 `index.html` directly (`file://`) works for looking around, but browsers
 restrict some APIs on `file://` — use `make run` for the real thing.
 
+No build step means no cache-busting either: after editing any `js/*.js`
+file, do a hard reload (Cmd/Ctrl+Shift+R) rather than a plain refresh. A
+plain refresh can serve a stale cached copy of some modules but not others
+if the browser doesn't revalidate every one of them, which looks like
+random, inconsistent behavior (a control's on-screen effect works but its
+display doesn't update, say) rather than an obvious "old version" — it's
+tempting to read that as a new bug when it's actually just a stale module.
+
 ## Controls
 
 **Chords** — hold a key to sound its chord (root position triad in the
@@ -57,17 +65,17 @@ circle-of-fifths order.
 Pad (default), Pluck, Organ, Warm Pad.
 
 **Tempo** — the on-screen ↓/↑ arrows tune the bpm (default 120, range
-40–240); the ♩ button toggles a low metronome click, one per beat, that
-plays continuously at the current bpm regardless of recording/looping.
+40–240); the ♩ button toggles a metronome click, one per beat, that plays
+continuously at the current bpm regardless of recording/looping.
 
 **Quantize** — the on-screen ↓/↑ arrows halve/double the quantize grid a
 recorded note's timing snaps to (default 1/32 note). This only ever affects
 what gets *recorded* into a loop — live play always sounds exactly when you
 press, never snapped.
 
-**Loop** — hold `Tab` (or the on-screen record button) while you play;
+**Loop** — hold `Space` (or the on-screen record button) while you play;
 release it and the loop plays back on repeat, snapped to the nearest beat at
-the current bpm. Hold `Tab` again to record a new loop (replaces the old
+the current bpm. Hold `Space` again to record a new loop (replaces the old
 one). "Clear loop" stops playback and drops it. You can keep playing chords
 live while the loop plays back — the two mix rather than one cutting the
 other off.
@@ -105,14 +113,14 @@ Run through this after any change, in each target browser (see below):
    labels should update to the new key's chord names.
 6. Change voice with `↑`/`↓` — holding a chord button should now sound
    noticeably different (e.g. Organ vs. Pluck).
-7. Hold `Tab`, play a couple of chords, release — loop should start playing
-   back on its own, in time, repeating cleanly with no glitch at the seam.
-   While it's playing, hold a chord button — you should hear your chord
-   mixed on top of the loop, not the loop cutting out.
+7. Hold `Space`, play a couple of chords, release — loop should start
+   playing back on its own, in time, repeating cleanly with no glitch at the
+   seam. While it's playing, hold a chord button — you should hear your
+   chord mixed on top of the loop, not the loop cutting out.
 8. Tap "Clear loop" — playback (and whatever it was last sounding) should
-   stop immediately. Separately, with a loop playing, tap `Tab` itself (down
-   and up with nothing held) — that should also cancel and clear the loop
-   immediately, not leave its last note ringing.
+   stop immediately. Separately, with a loop playing, tap `Space` itself
+   (down and up with nothing held) — that should also cancel and clear the
+   loop immediately, not leave its last note ringing.
 9. Hold two chord buttons at once — you should hear both chords together,
    not just the most recently pressed one, and the first one's notes should
    keep sounding uninterrupted (no cut/re-attack) as the second layers in;
@@ -123,9 +131,10 @@ Run through this after any change, in each target browser (see below):
 11. On mobile: rapid taps across chord/variant buttons shouldn't select
     text, trigger a callout menu, zoom the page, or leave a "stuck" (still
     lit, still sounding) button behind.
-12. Toggle the ♩ click on — you should hear an even, low click on every
-    beat, continuing whether or not you're recording/looping. Change the
-    BPM while it's clicking — the click should retime to match.
+12. Toggle the ♩ click on — you should clearly hear a crisp, even click on
+    every beat (not a low thud, easy to miss), continuing whether or not
+    you're recording/looping. Change the BPM while it's clicking — the
+    click should retime to match, and the BPM display should update too.
 13. Record a loop holding a chord for a couple of beats, release cleanly —
     on repeated playouts the note should hold and release the same way
     every time (no playout randomly cutting to silence early).

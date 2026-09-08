@@ -1,9 +1,9 @@
-// Loop recorder: hold Tab to record, release to snap the loop length to the
-// nearest beat (at the shared Tempo's bpm, see tempo.js) and start looping
-// it. Uses a standard Web-Audio lookahead scheduler (short setInterval that
-// schedules anything due in the next LOOKAHEAD seconds) rather than relying
-// on setTimeout/setInterval timing directly, so playback stays tight even
-// under UI jank.
+// Loop recorder: hold Space to record, release to snap the loop length to
+// the nearest beat (at the shared Tempo's bpm, see tempo.js) and start
+// looping it. Uses a standard Web-Audio lookahead scheduler (short
+// setInterval that schedules anything due in the next LOOKAHEAD seconds)
+// rather than relying on setTimeout/setInterval timing directly, so
+// playback stays tight even under UI jank.
 
 const LOOKAHEAD = 0.1; // seconds
 const TICK_MS = 25;
@@ -37,7 +37,19 @@ export class LoopRecorder {
     // Quantize to the shared Tempo's grid (default: nearest 32nd note) --
     // "just on loops": this only ever touches what gets *recorded*, so live
     // play is never snapped, only what a loop plays back.
-    this.events.push({ t: this.tempo.quantize(raw), type, notes });
+    const t = this.tempo.quantize(raw);
+    const last = this.events[this.events.length - 1];
+    // If quantizing collapses this event onto the exact same instant as the
+    // one just recorded (playing faster than the quantize grid resolves),
+    // replace it rather than stacking both: refreshSound() always records
+    // the *complete* current sound, not a delta, so the latest event alone
+    // already reflects everything that happened at that instant. Without
+    // this, replaying two same-`when` events back to back (see loop.js's
+    // scheduler) would fire an attack immediately cancelled by a release
+    // immediately followed by another attack -- audible as a garbled flurry
+    // instead of just the actual end state at that moment.
+    if (last && last.t === t) this.events[this.events.length - 1] = { t, type, notes };
+    else this.events.push({ t, type, notes });
   }
 
   stopRecording() {

@@ -1,4 +1,4 @@
-// Loop recorder: hold Tab to record, release to start looping playback,
+// Loop recorder: hold Space to record, release to start looping playback,
 // Clear loop drops it. Real timing (no fake clock) since the scheduler
 // (loop.js) drives itself off the real AudioContext clock via setInterval --
 // see DECISIONS.md "Loop recorder" for why.
@@ -42,15 +42,38 @@ test.describe('AudioEngine._envelopeValueAt (pure logic, no browser/audio needed
   });
 });
 
-test('recording a note then releasing Tab loops it, and Clear loop stops it', async ({ page }) => {
+test('holding the record key with a chord held actually records events', async ({ page }) => {
+  // Dedicated, minimal regression test: a prior session reported "the loop
+  // doesn't record at all" (later suspected to be a stale-cache artifact,
+  // see README.md's hard-reload note -- but worth guarding directly either
+  // way). This asserts recorder.events/state directly rather than only
+  // inferring "it must have recorded something" from the UI classes the
+  // more thorough test below also checks.
+  await holdKey(page, 'Space');
+  await holdKey(page, 'j');
+  await page.waitForTimeout(120);
+  await releaseKey(page, 'Space');
+  await releaseKey(page, 'j');
+
+  const { events, state } = await page.evaluate(async () => {
+    const mod = await import('/js/input.js');
+    return { events: mod.recorder.events, state: mod.recorder.state };
+  });
+  expect(events.length).toBeGreaterThan(0);
+  expect(state).toBe('playing');
+
+  await page.click('[data-action="clear-loop"]');
+});
+
+test('recording a note then releasing Space loops it, and Clear loop stops it', async ({ page }) => {
   const recordBtn = page.locator('[data-action="record"]');
   const loopDisplay = page.locator('[data-display="loop"]');
 
-  await holdKey(page, 'Tab');
+  await holdKey(page, 'Space');
   await expect(recordBtn).toHaveClass(/recording/);
   await expect(loopDisplay).toHaveText('Recording…');
 
-  // Release Tab *while J is still held* -- the recorded chord's 'on' event
+  // Release Space *while J is still held* -- the recorded chord's 'on' event
   // has no matching 'off' within the recording. Per DECISIONS.md ("Recording
   // stopped mid-hold gets a synthetic release at the loop boundary"),
   // stopRecording() appends a synthetic 'off' right at the loop length
@@ -59,7 +82,7 @@ test('recording a note then releasing Tab loops it, and Clear loop stops it', as
   // deterministic enough for the Clear-loop assertion below.
   await holdKey(page, 'j');
   await page.waitForTimeout(150);
-  await releaseKey(page, 'Tab');
+  await releaseKey(page, 'Space');
   await releaseKey(page, 'j');
 
   await expect(recordBtn).toHaveClass(/playing/);
@@ -90,12 +113,12 @@ test('loop length snaps to the nearest beat, not always rounding up', async ({ p
   // 0.6s is closer to 1 beat (0.5s) than to 2 beats (1.0s) at 120bpm -- a
   // regression to always-round-up (the previous, effectively-a-no-op "fix")
   // would land on 1.0s instead. Loop the hold slightly past the target
-  // beat, matching how someone actually releasing Tab tends to overshoot
+  // beat, matching how someone actually releasing Space tends to overshoot
   // rather than undershoot.
-  await holdKey(page, 'Tab');
+  await holdKey(page, 'Space');
   await holdKey(page, 'j');
   await page.waitForTimeout(600);
-  await releaseKey(page, 'Tab');
+  await releaseKey(page, 'Space');
   await releaseKey(page, 'j');
 
   const loopLength = await page.evaluate(async () => {
@@ -107,15 +130,15 @@ test('loop length snaps to the nearest beat, not always rounding up', async ({ p
   await page.click('[data-action="clear-loop"]');
 });
 
-test('tapping Tab while a loop is playing cancels and clears it, not just stops scheduling it', async ({
+test('tapping Space while a loop is playing cancels and clears it, not just stops scheduling it', async ({
   page,
 }) => {
   const loopDisplay = page.locator('[data-display="loop"]');
 
-  await holdKey(page, 'Tab');
+  await holdKey(page, 'Space');
   await holdKey(page, 'j');
   await page.waitForTimeout(150);
-  await releaseKey(page, 'Tab');
+  await releaseKey(page, 'Space');
   await releaseKey(page, 'j');
   await expect(loopDisplay).toHaveText('Looping');
 
@@ -124,8 +147,8 @@ test('tapping Tab while a loop is playing cancels and clears it, not just stops 
   await page.waitForTimeout(700);
 
   const mark = await markAudio(page);
-  await holdKey(page, 'Tab'); // a tap: down and immediately up, no chord held in between
-  await releaseKey(page, 'Tab');
+  await holdKey(page, 'Space'); // a tap: down and immediately up, no chord held in between
+  await releaseKey(page, 'Space');
   await expect(loopDisplay).toHaveText('No loop');
 
   const events = await audioEventsSince(page, mark);
@@ -140,12 +163,12 @@ test('tapping Tab while a loop is playing cancels and clears it, not just stops 
 });
 
 test('a chord held live keeps sounding on top of loop playback', async ({ page }) => {
-  await holdKey(page, 'Tab');
+  await holdKey(page, 'Space');
   await holdKey(page, 'j');
   await page.waitForTimeout(150);
   await releaseKey(page, 'j');
   await page.waitForTimeout(100);
-  await releaseKey(page, 'Tab');
+  await releaseKey(page, 'Space');
 
   const mark = await markAudio(page);
   await holdKey(page, 'o'); // degree 3, IV -- live, independent of whatever the loop is doing

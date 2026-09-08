@@ -58,11 +58,14 @@ export const VOICES = [
   },
 ];
 
+const CLICK_DURATION = 0.02; // seconds -- short enough to read as a click, not a tone
+
 export class AudioEngine {
   constructor() {
     this.ctx = null;
     this.master = null;
     this.limiter = null;
+    this.clickBuffer = null; // precomputed noise burst reused by every playClick() -- see unlock()
     this.voiceIndex = 0;
     this.active = new Map(); // voiceId -> array of sounding notes (see _playNote), one entry per polyphonic voice
   }
@@ -88,6 +91,14 @@ export class AudioEngine {
       this.master = this.ctx.createGain();
       this.master.gain.value = 0.5;
       this.master.connect(this.limiter);
+
+      // White noise, built once and reused for every click (see playClick)
+      // rather than regenerated per beat -- a metronome click should sound
+      // identical every time, not subtly re-textured.
+      const size = Math.ceil(this.ctx.sampleRate * CLICK_DURATION);
+      this.clickBuffer = this.ctx.createBuffer(1, size, this.ctx.sampleRate);
+      const data = this.clickBuffer.getChannelData(0);
+      for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
@@ -153,26 +164,34 @@ export class AudioEngine {
   }
 
   /**
-   * Play a single short, low, unpitched "tick" -- the metronome click (see
-   * js/metronome.js) -- through its own oscillator, independent of the
-   * chord voice system above (a click isn't a musical note: no ADSR preset,
-   * no per-chord level normalization, just a fixed short blip).
+   * Play a single short "tick" -- the metronome click (see js/metronome.js)
+   * -- independent of the chord voice system above (a click isn't a musical
+   * note: no ADSR preset, no per-chord level normalization, just a fixed
+   * short blip). A bandpassed noise burst around 10-12kHz rather than a
+   * pitched oscillator: that's the register a click actually needs to cut
+   * through and read as a percussive "tick" instead of a low, easily-masked
+   * tone (an earlier version used a ~90Hz oscillator, which turned out to
+   * be nearly inaudible on typical speakers).
    */
   playClick(when) {
     this.unlock();
     const t = when ?? this.ctx.currentTime;
     const ctx = this.ctx;
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.value = 90; // low -- distinct from any chord voice's register
+    const noise = ctx.createBufferSource();
+    noise.buffer = this.clickBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 11000;
+    filter.Q.value = 1.2;
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.6, t + 0.002);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-    osc.connect(gain);
+    gain.gain.linearRampToValueAtTime(0.9, t + 0.001);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + CLICK_DURATION);
+    noise.connect(filter);
+    filter.connect(gain);
     gain.connect(this.master);
-    osc.start(t);
-    osc.stop(t + 0.06);
+    noise.start(t);
+    noise.stop(t + CLICK_DURATION + 0.01);
   }
 
   /**

@@ -69,10 +69,10 @@ test('recorded loop events snap to the quantize grid, live play is never touched
   await page.click('[data-action="quantize-down"]');
   await expect(page.locator('[data-display="quantize"]')).toHaveText('1/4');
 
-  await holdKey(page, 'Tab');
+  await holdKey(page, 'Space');
   await page.waitForTimeout(220); // press J well off the 0.5s grid (nearer 0 than 0.5)
   await holdKey(page, 'j');
-  await releaseKey(page, 'Tab');
+  await releaseKey(page, 'Space');
   await releaseKey(page, 'j');
 
   const events = await page.evaluate(async () => {
@@ -88,7 +88,41 @@ test('recorded loop events snap to the quantize grid, live play is never touched
   await page.click('[data-action="clear-loop"]');
 });
 
-test('the metronome click plays a steady low click on every beat while enabled', async ({ page }) => {
+test('rapid chord changes faster than the quantize grid coalesce instead of stacking a same-instant flurry', async ({
+  page,
+}) => {
+  // Faster than the default 1/32 grid step (62.5ms at 120bpm) -- without
+  // coalescing, quantizing would collapse several of these onto the same
+  // timestamp, and replaying them all at once would attack a note only to
+  // immediately cancel it with a release, immediately followed by another
+  // attack: a garbled flurry rather than the actual end state.
+  await holdKey(page, 'Space');
+  await holdKey(page, 'j');
+  await page.waitForTimeout(20);
+  await releaseKey(page, 'j');
+  await holdKey(page, 'o');
+  await page.waitForTimeout(20);
+  await releaseKey(page, 'o');
+  await holdKey(page, 'p');
+  await page.waitForTimeout(300);
+  await releaseKey(page, 'Space');
+  await releaseKey(page, 'p');
+
+  const events = await page.evaluate(async () => {
+    const mod = await import('/js/input.js');
+    return mod.recorder.events;
+  });
+  // No two *consecutive* recorded events may share a timestamp -- each
+  // quantized instant is represented exactly once, by whatever the actual
+  // sound was at that instant.
+  for (let i = 1; i < events.length; i++) {
+    expect(events[i].t).not.toBe(events[i - 1].t);
+  }
+
+  await page.click('[data-action="clear-loop"]');
+});
+
+test('the metronome click plays a steady click on every beat while enabled', async ({ page }) => {
   const clickBtn = page.locator('[data-action="click-toggle"]');
 
   const mark = await markAudio(page);
@@ -96,15 +130,13 @@ test('the metronome click plays a steady low click on every beat while enabled',
   await expect(clickBtn).toHaveClass(/active/);
   await page.waitForTimeout(1100); // 120bpm = 0.5s/beat -> ~2 clicks
 
-  const clicks = (await audioEventsSince(page, mark)).filter((e) => e.type === 'start' && e.freq === 90);
+  const clicks = (await audioEventsSince(page, mark)).filter((e) => e.type === 'click');
   expect(clicks.length).toBeGreaterThanOrEqual(2);
 
   const disableMark = await markAudio(page);
   await clickBtn.click();
   await expect(clickBtn).not.toHaveClass(/active/);
   await page.waitForTimeout(600);
-  const afterDisable = (await audioEventsSince(page, disableMark)).filter(
-    (e) => e.type === 'start' && e.freq === 90,
-  );
+  const afterDisable = (await audioEventsSince(page, disableMark)).filter((e) => e.type === 'click');
   expect(afterDisable).toHaveLength(0);
 });
