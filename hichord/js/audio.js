@@ -150,9 +150,16 @@ export class AudioEngine {
    * no longer wanted are released individually; newly-wanted notes attack
    * fresh, layered on top. Voice ids are independent of each other -- see
    * the module comment above.
+   *
+   * `when` lets a caller schedule this for a precise future point on the
+   * audio clock instead of right now -- loop.js's scheduler uses this so
+   * playback timing comes from Web Audio's own sample-accurate clock rather
+   * than from whenever the calling JS happens to run (see loop.js). Live
+   * input (input.js) never passes it, so it defaults to "now".
    */
-  playChord(voiceId, midiNotes) {
+  playChord(voiceId, midiNotes, when) {
     this.unlock();
+    const t = when ?? this.ctx.currentTime;
     const existing = this.active.get(voiceId) || [];
     const target = new Set(midiNotes);
     const keep = existing.filter((note) => target.has(note.midi));
@@ -163,25 +170,28 @@ export class AudioEngine {
     // not once per button, so that pitch's loudness doesn't stack.
     const toAdd = midiNotes.filter((m, i) => !already.has(m) && midiNotes.indexOf(m) === i);
 
-    const now = this.ctx.currentTime;
-    drop.forEach((note) => this._releaseNote(note, this.voice.release, now));
-    const added = toAdd.map((m) => this._playNote(m, this.voice, now, midiNotes.length));
+    drop.forEach((note) => this._releaseNote(note, this.voice.release, t));
+    const added = toAdd.map((m) => this._playNote(m, this.voice, t, midiNotes.length));
     this.active.set(voiceId, keep.concat(added));
   }
 
-  /** Release whatever's sounding on `voiceId`, using the current voice preset's natural release. */
-  stopChord(voiceId) {
+  /**
+   * Release whatever's sounding on `voiceId`, using the current voice
+   * preset's natural release. `when` schedules this for a precise future
+   * audio-clock time instead of right now -- see playChord() above.
+   */
+  stopChord(voiceId, when) {
     if (!this.ctx || !this.active.has(voiceId)) return;
-    const now = this.ctx.currentTime;
-    this.active.get(voiceId).forEach((note) => this._releaseNote(note, this.voice.release, now));
+    const t = when ?? this.ctx.currentTime;
+    this.active.get(voiceId).forEach((note) => this._releaseNote(note, this.voice.release, t));
     this.active.delete(voiceId);
   }
 
-  _releaseNote(note, releaseTime, now) {
+  _releaseNote(note, releaseTime, at) {
     const { oscs, gain } = note;
-    gain.gain.cancelScheduledValues(now);
-    gain.gain.setValueAtTime(gain.gain.value, now);
-    gain.gain.linearRampToValueAtTime(0.0001, now + releaseTime);
-    oscs.forEach(({ node }) => node.stop(now + releaseTime + 0.02));
+    gain.gain.cancelScheduledValues(at);
+    gain.gain.setValueAtTime(gain.gain.value, at);
+    gain.gain.linearRampToValueAtTime(0.0001, at + releaseTime);
+    oscs.forEach(({ node }) => node.stop(at + releaseTime + 0.02));
   }
 }

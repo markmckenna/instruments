@@ -48,6 +48,38 @@ test('recording a note then releasing Tab loops it, and Clear loop stops it', as
   expect(afterClear).toHaveLength(0); // scheduler is actually stopped, not just hidden by the UI
 });
 
+test('tapping Tab while a loop is playing cancels and clears it, not just stops scheduling it', async ({
+  page,
+}) => {
+  const loopDisplay = page.locator('[data-display="loop"]');
+
+  await holdKey(page, 'Tab');
+  await holdKey(page, 'j');
+  await page.waitForTimeout(150);
+  await releaseKey(page, 'Tab');
+  await releaseKey(page, 'j');
+  await expect(loopDisplay).toHaveText('Looping');
+
+  // Let the loop actually start sounding at least once before cancelling it,
+  // so there's a note genuinely active on the 'loop' voice to prove gets cut.
+  await page.waitForTimeout(700);
+
+  const mark = await markAudio(page);
+  await holdKey(page, 'Tab'); // a tap: down and immediately up, no chord held in between
+  await releaseKey(page, 'Tab');
+  await expect(loopDisplay).toHaveText('No loop');
+
+  const events = await audioEventsSince(page, mark);
+  // Whatever the loop last triggered must be cut immediately, not left
+  // ringing just because nothing new is scheduled to replace it.
+  expect(events.some((e) => e.type === 'stop')).toBe(true);
+
+  const afterMark = await markAudio(page);
+  await page.waitForTimeout(1200);
+  const afterTap = (await audioEventsSince(page, afterMark)).filter((e) => e.type === 'start');
+  expect(afterTap).toHaveLength(0); // scheduler is actually stopped, not just hidden by the UI
+});
+
 test('a chord held live keeps sounding on top of loop playback', async ({ page }) => {
   await holdKey(page, 'Tab');
   await holdKey(page, 'j');

@@ -99,7 +99,9 @@ Run through this after any change, in each target browser (see below):
    While it's playing, hold a chord button — you should hear your chord
    mixed on top of the loop, not the loop cutting out.
 8. Tap "Clear loop" — playback (and whatever it was last sounding) should
-   stop immediately.
+   stop immediately. Separately, with a loop playing, tap `Tab` itself (down
+   and up with nothing held) — that should also cancel and clear the loop
+   immediately, not leave its last note ringing.
 9. Hold two chord buttons at once — you should hear both chords together,
    not just the most recently pressed one, and the first one's notes should
    keep sounding uninterrupted (no cut/re-attack) as the second layers in;

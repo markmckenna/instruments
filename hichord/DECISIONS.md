@@ -96,9 +96,16 @@ they are below.
 - Recording only runs while Tab (or the on-screen record button) is held.
   Releasing it immediately starts looping whatever was captured, snapped to
   the nearest beat at the fixed 120bpm the README specifies (minimum length:
-  1 beat). Pressing/holding Tab again starts a *new* recording, replacing the
-  old loop outright (there's no overdub/multi-layer mode here — the README
-  describes one loop, not a layered looper).
+  1 beat) — see "Loop length snaps to the nearest beat" below for why nearest
+  rather than always rounding up. Pressing/holding Tab again starts a *new*
+  recording, replacing the old loop outright (there's no overdub/multi-layer
+  mode here — the README describes one loop, not a layered looper) — and, if
+  a loop was playing, immediately silences it (`stopChord('loop')`) rather
+  than leaving its last-triggered note stuck ringing once the scheduler that
+  would otherwise have released it stops. This is also what makes a quick
+  tap of Tab (no chord held in between) behave as "cancel and clear" the
+  previous loop: nothing gets recorded, so `stopRecording()` lands back on
+  `idle`, and the old loop's sound has already been cut.
 - If a chord was already sounding at the moment recording starts, that
   chord's notes are captured as the loop's `t=0` state — otherwise a chord
   you were holding before you started recording would silently drop out of
@@ -110,12 +117,22 @@ they are below.
 - **Recording stopped mid-hold gets a synthetic release at the loop
   boundary**: if you release Tab while still holding a chord, that chord's
   `'on'` event has no matching `'off'` within the recording. Without a fix,
-  every loop iteration would fire that same `'on'` again on top of the
-  still-sounding note (`playChord()` re-triggers rather than releasing),
-  which never actually stops — audible as one continuous note rather than a
-  loop. `stopRecording()` now appends a synthetic `'off'` event at exactly
-  the loop length when the last recorded event is an unmatched `'on'`, so
-  playback always cleanly releases the note before repeating.
+  every loop iteration would fire that same `'on'` again while its notes are
+  already sounding from the previous iteration (`playChord()` leaves
+  already-sounding notes alone, see Audio engine below), so they'd never
+  actually get released — audible as one continuous note rather than a loop.
+  `stopRecording()` now appends a synthetic `'off'` event at exactly the loop
+  length when the last recorded event is an unmatched `'on'`, so playback
+  always cleanly releases the note before repeating.
+- **Loop length snaps to the nearest beat, not always up**: an earlier
+  version always rounded the recorded length *up* to the next whole beat,
+  which tacks on up to almost a full beat of dead air at the loop's tail
+  every time (any overshoot past a beat boundary, even a few ms, jumps the
+  loop length up by a whole extra beat) — audible as loop playback that
+  drifts behind an external tempo. `stopRecording()` now rounds to the
+  *nearest* beat instead, only falling back to rounding up when nearest would
+  round below the actual recorded length (which would truncate real content,
+  cutting an event's own timestamp short).
 - **`clear()` and `stopPlaying()` explicitly stop the `'loop'` voice.**
   Previously they only stopped the scheduler (no more events would be
   *scheduled*), but whatever the loop had most recently triggered kept
@@ -129,10 +146,19 @@ they are below.
   a pitch shared between one event and the next keeps sounding across them
   rather than retriggering — playback reproduces the same per-note
   independence live play has, not an approximation of it.
-- Scheduling uses the standard Web Audio "lookahead" pattern (a ~25ms
-  interval that schedules anything due in the next 100ms via the audio
-  clock, not `setInterval` timing directly) so loop timing doesn't drift or
-  jitter with UI thread hiccups.
+- **Scheduling uses the standard Web Audio "lookahead" pattern**: a ~25ms
+  `setInterval` looks up to 100ms ahead and, for anything due in that window,
+  calls `AudioEngine.playChord`/`stopChord` with an explicit future `when` —
+  Web Audio's own sample-accurate clock is what actually triggers the note
+  (`osc.start(when)`, gain ramps scheduled from `when`), not the JS timer.
+  An earlier version scheduled the *call* itself with `setTimeout(fn,
+  delayMs)` and let it stamp "now" as the note's start time once the timeout
+  fired — `setTimeout`'s fire time is only as precise as the JS event loop,
+  which routinely lands tens of milliseconds late under any contention, and
+  that lateness landed directly on every note's actual timing, audible as
+  loop playback that lagged behind an external tempo. Live play (`input.js`)
+  never passes `when`, so it's unaffected — a live keypress should always
+  sound immediately, not scheduled ahead.
 - No on-screen tempo/bar-count control — 120bpm and free-length-snapped-to-
   beat is what the README specifies, so that's all that's implemented.
   Added one small affordance beyond the README: a "Clear loop" button, since

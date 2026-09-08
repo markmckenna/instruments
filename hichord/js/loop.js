@@ -25,6 +25,7 @@ export class LoopRecorder {
   startRecording() {
     this._stopScheduler();
     this.engine.unlock(); // idempotent; ensures ctx exists even if nothing has sounded yet
+    this.engine.stopChord('loop'); // don't leave whatever the old loop last triggered ringing forever
     this.events = [];
     this.state = 'recording';
     this._recordStart = this.engine.ctx.currentTime;
@@ -38,23 +39,28 @@ export class LoopRecorder {
   stopRecording() {
     if (this.state !== 'recording') return;
     const rawLength = this.engine.ctx.currentTime - this._recordStart;
-    // Round UP to the next beat, never down: event timestamps are offsets
-    // from recording start up to rawLength, so rounding down could make an
-    // event's own timestamp exceed the loop length it's supposed to play
-    // within, throwing off every subsequent iteration's timing.
-    const beats = Math.max(1, Math.ceil(rawLength / BEAT_SECONDS));
-    this.loopLength = beats * BEAT_SECONDS;
     if (this.events.length === 0) {
       this.state = 'idle';
       return;
     }
+    // Snap to the *nearest* beat rather than always rounding up: rounding up
+    // unconditionally tacks on up to almost a full beat of dead air at the
+    // loop's tail on every recording, which is what made played-back loops
+    // feel like they drift behind an external tempo. Nearest still can't go
+    // below rawLength, though -- event timestamps are offsets from recording
+    // start up to rawLength, so a shorter loop length would make an event's
+    // own timestamp exceed the loop it's supposed to play within, throwing
+    // off every subsequent iteration's timing.
+    const nearestBeats = Math.round(rawLength / BEAT_SECONDS);
+    const beats = Math.max(1, nearestBeats * BEAT_SECONDS >= rawLength ? nearestBeats : nearestBeats + 1);
+    this.loopLength = beats * BEAT_SECONDS;
     // If recording stopped while a chord was still held, its 'on' event has
     // no matching 'off' -- without this, every loop iteration would fire
-    // that same 'on' again on top of the still-sounding note (playChord()
-    // re-triggers rather than releasing), never actually releasing it, which
-    // sounds like one continuous note rather than a loop. Force a release
-    // right at the loop boundary so playback always cleanly cuts the note
-    // before repeating.
+    // that same 'on' again while its notes are already sounding from the
+    // previous iteration (playChord() leaves already-sounding notes alone,
+    // see audio.js), so they'd never actually get released -- one continuous
+    // note rather than a loop. Force a release right at the loop boundary so
+    // playback always cleanly cuts the note before repeating.
     if (this.events[this.events.length - 1].type === 'on') {
       this.events.push({ t: this.loopLength, type: 'off', notes: null });
     }
@@ -119,13 +125,16 @@ export class LoopRecorder {
     }
   }
 
+  // Schedules straight onto the audio clock via AudioEngine's `when` param
+  // (osc.start(when), gain ramps from `when`) rather than deferring the call
+  // itself with setTimeout: setTimeout's fire time is only as precise as the
+  // JS event loop, which routinely lands tens of milliseconds late under any
+  // contention, and that lateness would land directly on every note's actual
+  // start/stop time -- audible as loop playback that drifts behind tempo.
+  // Scheduling ahead (within LOOKAHEAD) and letting Web Audio's own clock
+  // trigger the note is what "the standard lookahead pattern" actually means.
   _fireEvent(ev, when) {
-    const ctx = this.engine.ctx;
-    const delayMs = Math.max(0, (when - ctx.currentTime) * 1000);
-    setTimeout(() => {
-      if (this.state !== 'playing') return; // loop was cleared/stopped after this was scheduled
-      if (ev.type === 'on') this.engine.playChord('loop', ev.notes);
-      else this.engine.stopChord('loop');
-    }, delayMs);
+    if (ev.type === 'on') this.engine.playChord('loop', ev.notes, when);
+    else this.engine.stopChord('loop', when);
   }
 }
