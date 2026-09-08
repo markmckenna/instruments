@@ -38,22 +38,31 @@ export class LoopRecorder {
 
   stopRecording() {
     if (this.state !== 'recording') return;
-    const rawLength = this.engine.ctx.currentTime - this._recordStart;
     if (this.events.length === 0) {
       this.state = 'idle';
       return;
     }
-    // Snap to the *nearest* beat rather than always rounding up: rounding up
-    // unconditionally tacks on up to almost a full beat of dead air at the
-    // loop's tail on every recording, which is what made played-back loops
-    // feel like they drift behind an external tempo. Nearest still can't go
-    // below rawLength, though -- event timestamps are offsets from recording
-    // start up to rawLength, so a shorter loop length would make an event's
-    // own timestamp exceed the loop it's supposed to play within, throwing
-    // off every subsequent iteration's timing.
-    const nearestBeats = Math.round(rawLength / BEAT_SECONDS);
-    const beats = Math.max(1, nearestBeats * BEAT_SECONDS >= rawLength ? nearestBeats : nearestBeats + 1);
+    const rawLength = this.engine.ctx.currentTime - this._recordStart;
+    // Snap to the *nearest* beat, even if that rounds shorter than what was
+    // actually played. Rounding up unconditionally (the previous behavior --
+    // an earlier attempt at "nearest" here still always rounded up too, by
+    // construction, it just did it in a roundabout way) tacks on up to
+    // almost a full beat of dead air at the loop's tail on every single
+    // recording, and that overshoot is *the loop length itself* -- it
+    // compounds on every repeat, which is why played-back loops felt
+    // increasingly behind an external tempo the longer they played, not just
+    // "off by a fixed amount". Rounding down instead just clips whatever's
+    // still sounding at the boundary a little early (at most a quarter
+    // beat) -- generally well after its attack/decay has already settled
+    // into a steady sustain by then, so it's inaudible, unlike the silence
+    // rounding up used to add every cycle.
+    const beats = Math.max(1, Math.round(rawLength / BEAT_SECONDS));
     this.loopLength = beats * BEAT_SECONDS;
+    // No event may land beyond the loop it's meant to play within, or it
+    // (and the next iteration's events) would fire out of order. Clamp
+    // first, then decide below (using the now-clamped last event) whether a
+    // synthetic release is still needed.
+    this.events = this.events.map((ev) => (ev.t > this.loopLength ? { ...ev, t: this.loopLength } : ev));
     // If recording stopped while a chord was still held, its 'on' event has
     // no matching 'off' -- without this, every loop iteration would fire
     // that same 'on' again while its notes are already sounding from the

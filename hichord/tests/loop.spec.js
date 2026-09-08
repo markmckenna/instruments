@@ -28,8 +28,9 @@ test('recording a note then releasing Tab loops it, and Clear loop stops it', as
   await expect(recordBtn).toHaveClass(/playing/);
   await expect(loopDisplay).toHaveText('Looping');
 
-  // Loop length is rounded up to a whole beat at 120bpm (minimum 0.5s, see
-  // loop.js); 2s comfortably covers at least one full replay of a short loop.
+  // Loop length is snapped to the nearest whole beat at 120bpm (minimum
+  // 0.5s, see loop.js); 2s comfortably covers at least one full replay of a
+  // short loop.
   const mark = await markAudio(page);
   await page.waitForTimeout(2000);
   const replayed = (await audioEventsSince(page, mark)).filter((e) => e.type === 'start');
@@ -46,6 +47,27 @@ test('recording a note then releasing Tab loops it, and Clear loop stops it', as
   await page.waitForTimeout(1200);
   const afterClear = (await audioEventsSince(page, afterClearMark)).filter((e) => e.type === 'start');
   expect(afterClear).toHaveLength(0); // scheduler is actually stopped, not just hidden by the UI
+});
+
+test('loop length snaps to the nearest beat, not always rounding up', async ({ page }) => {
+  // 0.6s is closer to 1 beat (0.5s) than to 2 beats (1.0s) at 120bpm -- a
+  // regression to always-round-up (the previous, effectively-a-no-op "fix")
+  // would land on 1.0s instead. Loop the hold slightly past the target
+  // beat, matching how someone actually releasing Tab tends to overshoot
+  // rather than undershoot.
+  await holdKey(page, 'Tab');
+  await holdKey(page, 'j');
+  await page.waitForTimeout(600);
+  await releaseKey(page, 'Tab');
+  await releaseKey(page, 'j');
+
+  const loopLength = await page.evaluate(async () => {
+    const mod = await import('/js/input.js');
+    return mod.recorder.loopLength;
+  });
+  expect(loopLength).toBe(0.5);
+
+  await page.click('[data-action="clear-loop"]');
 });
 
 test('tapping Tab while a loop is playing cancels and clears it, not just stops scheduling it', async ({

@@ -124,15 +124,24 @@ they are below.
   `stopRecording()` now appends a synthetic `'off'` event at exactly the loop
   length when the last recorded event is an unmatched `'on'`, so playback
   always cleanly releases the note before repeating.
-- **Loop length snaps to the nearest beat, not always up**: an earlier
-  version always rounded the recorded length *up* to the next whole beat,
-  which tacks on up to almost a full beat of dead air at the loop's tail
-  every time (any overshoot past a beat boundary, even a few ms, jumps the
-  loop length up by a whole extra beat) — audible as loop playback that
-  drifts behind an external tempo. `stopRecording()` now rounds to the
-  *nearest* beat instead, only falling back to rounding up when nearest would
-  round below the actual recorded length (which would truncate real content,
-  cutting an event's own timestamp short).
+- **Loop length snaps to the nearest beat, not always up, and may clip the
+  tail**: an earlier version always rounded the recorded length *up* to the
+  next whole beat, which tacks on up to almost a full beat of dead air at the
+  loop's tail every time (any overshoot past a beat boundary, even a few ms,
+  jumps the loop length up by a whole extra beat) — and because that overshoot
+  *is* the loop's own length, it compounds on every repeat, which is what made
+  playback feel like it drifted further behind an external tempo the longer
+  it played, not just "off by a fixed amount". (A first attempt at fixing this
+  only rounded up in a more roundabout way — computing `Math.round` and then
+  falling back to a bump-up whenever it rounded down — which is mathematically
+  identical to plain `Math.ceil` in every case, so it silently fixed nothing.)
+  `stopRecording()` now uses a plain `Math.round`, genuinely allowing the loop
+  to come out *shorter* than what was played: any event whose timestamp would
+  land past the new (possibly shorter) length gets clamped to it, clipping at
+  most a quarter beat off whatever was still sounding. That's a much smaller
+  problem than the dead air rounding up used to add — a note that far into
+  its release/sustain has long since settled, so a slightly early cutoff is
+  inaudible, unlike silence.
 - **`clear()` and `stopPlaying()` explicitly stop the `'loop'` voice.**
   Previously they only stopped the scheduler (no more events would be
   *scheduled*), but whatever the loop had most recently triggered kept
