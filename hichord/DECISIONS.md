@@ -48,14 +48,16 @@ they are below.
   one-line README bullet — if a chord doesn't sound like what you expected
   when holding a given variant, this list is where to check first and adjust.
 
-- **Register**: chord roots are anchored to `MIDI 60 + rootPitchClass` (so
-  everything lands within one octave band, C4–B4-ish), with chord tones
-  stacked upward from there. This keeps voicings in a consistent, pleasant
-  register without needing separate octave-tracking logic; it means the
-  "root" of a chord isn't always the lowest sounding pitch (e.g. wide
-  variants can invert relative to a plain ear's expectation), which is a
-  reasonable trade for implementation simplicity but worth revisiting if a
-  future pass wants proper voice-leading.
+- **Register**: chord roots are anchored to `MIDI 60 + keyPitchClass +
+  degreeInterval` -- no octave-wrapping. `DEGREES`' intervals (I=0 through
+  vii°=11) are already strictly increasing, so this guarantees the tonic (I)
+  is always the lowest-rooted chord for the current key and each further
+  degree in the JIKOLP; sequence sits higher than the last, in whichever key
+  is selected. An earlier version reduced the root to a single octave band
+  (`MIDI 60 + rootPitchClass % 12`) for simplicity, but that let a degree's
+  root wrap *below* the tonic (e.g. key G's IV, at interval 5, wrapped down
+  to C4 instead of sitting above G4) -- audibly wrong for a control surface
+  whose whole point is a left-to-right ascending run of chords.
 
 ## Input model
 
@@ -66,15 +68,19 @@ they are below.
   there's still only one variant control, matching the real device's single
   joystick, so it shapes whatever's held uniformly rather than needing its
   own per-chord state.
-- **Variant keys glide, not retrigger**: changing the held variant while a
-  chord button is held re-pitches the currently-sounding notes in place
-  (`AudioEngine.updateChord`) rather than cutting and restarting them, as
-  long as the note count matches. This was a deliberate choice for feel —
-  it's what makes holding J and tapping across the variant grid feel like
-  "shaping" one held note rather than a stutter of retriggers. When the note
-  count changes (e.g. a 3-note triad to a 5-note `9` chord) there's no clean
-  1:1 pitch mapping to glide, so it falls back to a quick (15ms) crossfaded
-  retrigger instead.
+- **Every note voiced independently, by exact pitch**: whatever should be
+  sounding on a voice (a new chord button added to what's already held, a
+  variant change, a key change) is compared against what's already sounding
+  by exact MIDI pitch (`AudioEngine.playChord`, see Audio engine below). A
+  pitch that's wanted both before and after is left completely untouched —
+  no retrigger, no re-envelope — so adding I to an already-held J only
+  attacks I's new notes on top, and dropping back to J only releases the
+  notes I added, never cutting J's own notes. This replaced an earlier
+  index-based "glide" (`AudioEngine.updateChord`, since removed) that bent a
+  held chord's oscillators to a new pitch in place when the note count
+  matched, and fully stopped/restarted every note otherwise — which is what
+  caused a chord to audibly cut and re-attack just because a second chord
+  button was added alongside it.
 - **`event.code`, not `event.key`**: keyboard handling is physical-position
   based, so it's independent of the OS keyboard layout/language and of
   shift/caps state. This also means the control scheme is described in terms
@@ -117,12 +123,12 @@ they are below.
   doesn't work." Both now call `engine.stopChord('loop')` so pressing Clear
   (or otherwise stopping playback) is heard immediately.
 - Every "the sounding chord changed" moment (new chord button press, or a
-  variant change while held) is recorded as a fresh note-on event, even when
-  it was actually a live glide rather than a retrigger. On loop playback this
-  replays as a series of quick crossfaded retriggers rather than exactly
-  reproducing the original glide. This is a deliberate simplification — full
-  glide-accurate loop fidelity would need a richer event format for
-  marginal audible benefit at 120bpm loop granularity.
+  variant change while held) is recorded as a fresh note-on event with the
+  full note set sounding at that instant, not a delta. On loop playback each
+  event goes through the same `playChord()` reconciliation live play does, so
+  a pitch shared between one event and the next keeps sounding across them
+  rather than retriggering — playback reproduces the same per-note
+  independence live play has, not an approximation of it.
 - Scheduling uses the standard Web Audio "lookahead" pattern (a ~25ms
   interval that schedules anything due in the next 100ms via the audio
   clock, not `setInterval` timing directly) so loop timing doesn't drift or
@@ -142,23 +148,24 @@ they are below.
   Warm Pad) cycle with the up/down arrows or on-screen voice buttons; Soft
   Pad is the default, matching the README's "default voicing has a little
   bit of attack/decay."
-- `playChord()` always releases whatever was previously sounding itself
-  (short 15ms crossfade), rather than expecting callers to call `stopChord()`
-  first. Caught during implementation: an earlier version relied on callers
-  to stop notes before starting new ones, which left orphaned oscillators
-  running forever if a caller (the loop player, specifically) called
-  `playChord()` back-to-back without an intervening stop — audible as
-  buildup/distortion over a running loop. Centralizing the release inside
-  `playChord()` makes that class of bug structurally impossible rather than
-  something every call site has to remember.
+- `playChord()` always reconciles against whatever was previously sounding
+  itself (diffing by exact pitch, see "Every note voiced independently"
+  above) rather than expecting callers to call `stopChord()` first. Caught
+  during implementation: an earlier version relied on callers to stop notes
+  before starting new ones, which left orphaned oscillators running forever
+  if a caller (the loop player, specifically) called `playChord()`
+  back-to-back without an intervening stop — audible as buildup/distortion
+  over a running loop. Centralizing the reconciliation inside `playChord()`
+  makes that class of bug structurally impossible rather than something
+  every call site has to remember.
 - **Multiple independent voices, identified by a caller-chosen id**:
-  `playChord`/`updateChord`/`stopChord` all now take a `voiceId` and track
-  each one's sounding notes separately (`AudioEngine.active`, a `Map`).
-  `input.js` uses `'live'` for whatever's currently held; `loop.js` uses
-  `'loop'` for playback. Previously there was a single shared `activeNotes`
-  array, so live playing and loop playback (or, before chord buttons became
-  polyphonic, any two callers) stole each other's notes rather than mixing —
-  this is what makes overlaying chords and playing over a running loop work.
+  `playChord`/`stopChord` all take a `voiceId` and track each one's sounding
+  notes separately (`AudioEngine.active`, a `Map`). `input.js` uses `'live'`
+  for whatever's currently held; `loop.js` uses `'loop'` for playback.
+  Previously there was a single shared `activeNotes` array, so live playing
+  and loop playback (or, before chord buttons became polyphonic, any two
+  callers) stole each other's notes rather than mixing — this is what makes
+  overlaying chords and playing over a running loop work.
 - **Gain staging fixed to stop clipping**: every note used to play at full
   oscillator gain regardless of how many notes were in the chord, so a wide
   voicing (the 5-note `9` variant, say) summed to several times the
@@ -174,9 +181,11 @@ they are below.
 
 - **Layout**: the chord grid puts J/K/L/; on the bottom row and I/O/P on the
   top row (via CSS `grid-template-areas` in `chord-keyboard`, rather than
-  per-button inline styles), each top button centered over the boundary of
-  two bottom ones — mirroring where those keys actually sit on a physical
-  keyboard. The two on-screen panels are ordered Variants (QWE/ASD/ZXC) then
+  per-button inline styles), on a 12-column grid (the LCM of 3 and 4) so
+  each row's buttons divide the full row width evenly — 4 columns apiece for
+  I/O/P, 3 apiece for J/K/L/; — rather than an earlier version that gave
+  I/O/P the same column positions as K/L/; and left the space above J empty.
+  The two on-screen panels are ordered Variants (QWE/ASD/ZXC) then
   Chords (JIKOLP;) so that, in the side-by-side desktop layout, the
   left-hand-side keys are the left panel and the right-hand-side keys are
   the right panel, matching where your hands actually go.
@@ -192,8 +201,9 @@ they are below.
 
 ## Automated testing
 
-- **Playwright, Chromium only**: HiChord's logic (polyphony, glide-vs-retrigger
-  variant math, loop scheduling, the blur/visibility panic valve) has grown
+- **Playwright, Chromium only**: HiChord's logic (polyphony, per-note
+  independence across variant/key/chord-button changes, loop scheduling, the
+  blur/visibility panic valve) has grown
   past what a manual smoke test alone catches reliably (`../PROCESS.md`'s
   validation approach flagged this as the trigger for adding tooling). No
   audio framework or DOM framework needed changing to add tests: Playwright
@@ -203,14 +213,14 @@ they are below.
   stand-in. Chromium only for now (not also WebKit/Safari) to keep CI-less
   local runs fast; cross-browser behavior stays on the manual checklist.
 - **Real audio, asserted via a probe, not a mock**: tests don't stub Web
-  Audio -- `tests/support/fixtures.js` wraps `OscillatorNode.start/stop` and
-  `AudioParam.setTargetAtTime` in the page so real oscillator frequencies and
-  glide targets get logged, then compared against frequencies computed from
-  the app's own `theory.js`/`audio.js` math (`tests/support/expected-audio.js`),
-  not a hand-copied table. This is what makes the glide-vs-retrigger
-  distinction (see "Variant keys glide, not retrigger" above) actually
-  testable: a glide shows up as `setTargetAtTime` calls with no new
-  oscillators, a retrigger as stop+start pairs.
+  Audio -- `tests/support/fixtures.js` wraps `OscillatorNode.start/stop` in
+  the page so real oscillator start/stop frequencies get logged, then
+  compared against frequencies computed from the app's own
+  `theory.js`/`audio.js` math (`tests/support/expected-audio.js`), not a
+  hand-copied table. This is what makes the per-note independence (see
+  "Every note voiced independently" above) actually testable: a pitch that
+  persists across a chord change shows up as no start/stop pair at all, only
+  the genuinely new or dropped pitches do.
 - **Real input, not synthetic events**: on-screen buttons are held with a
   real Playwright mouse pointer and physical keys with real keyboard events,
   not fabricated `PointerEvent`s -- `input.js`'s `bindPress()` calls

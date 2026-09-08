@@ -1,47 +1,54 @@
 // Chord variants (the QWE/ASD/ZXC grid). Covers both documented behaviors
 // from DECISIONS.md:
-//   - "Variant keys glide, not retrigger": changing the held variant while a
-//     chord is held re-pitches in place (setTargetAtTime), no new oscillators,
-//     as long as the note count doesn't change.
-//   - when the note count *does* change (e.g. triad -> 4-note M7), it falls
-//     back to a full stop-then-restart.
+//   - "Every note voiced independently, by exact pitch": changing the held
+//     variant while a chord is held reconciles the sounding notes by exact
+//     MIDI pitch -- a pitch shared before and after keeps sounding untouched,
+//     only the pitches that actually changed stop/start.
 // and the variant math itself (quality-dependent variants like M7/Mm flip
 // behaving differently over a major vs. minor vs. diminished base chord).
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
-import { expectedChordFrequencies } from './support/expected-audio.js';
+import { chordMidiNotes, expectedTransition } from './support/expected-audio.js';
+
+function eventFreqs(events, type) {
+  return events.filter((e) => e.type === type).map((e) => e.freq).sort((a, b) => a - b);
+}
 
 test.describe('variants', () => {
-  test('a same-note-count variant (Mm flip) glides in place, no retrigger', async ({ page }) => {
+  test('a variant that only changes one note (Mm flip) only stops/starts that note', async ({ page }) => {
     await holdKey(page, 'j'); // degree 0, I, major triad
 
+    const before = chordMidiNotes(0, 0, 'KeyS');
+    const after = chordMidiNotes(0, 0, 'KeyW'); // Mm flip: major<->minor third, still a triad
+    const { started, stopped } = expectedTransition(before, after);
+
     const mark = await markAudio(page);
-    await holdKey(page, 'w'); // Mm flip: major<->minor third, still a triad
+    await holdKey(page, 'w');
     const events = await audioEventsSince(page, mark);
 
-    expect(events.filter((e) => e.type === 'start')).toHaveLength(0);
-    expect(events.filter((e) => e.type === 'stop')).toHaveLength(0);
-    const glideTargets = events
-      .filter((e) => e.type === 'glide')
-      .map((e) => e.target)
-      .sort((a, b) => a - b);
-    expect(glideTargets).toEqual(expectedChordFrequencies(0, 0, 'KeyW'));
+    expect(eventFreqs(events, 'start')).toEqual(started);
+    expect(eventFreqs(events, 'stop')).toEqual(stopped);
 
     await releaseKey(page, 'w');
     await releaseKey(page, 'j');
   });
 
-  test('a note-count-changing variant (M7) falls back to a full retrigger', async ({ page }) => {
+  test('a variant that only adds a note (M7) layers it on top, leaving the triad untouched', async ({
+    page,
+  }) => {
     await holdKey(page, 'j'); // 3-note major triad
 
+    const before = chordMidiNotes(0, 0, 'KeyS');
+    const after = chordMidiNotes(0, 0, 'KeyD'); // M7: adds a 4th note, root/3rd/5th unchanged
+    const { started, stopped } = expectedTransition(before, after);
+
     const mark = await markAudio(page);
-    await holdKey(page, 'd'); // M7: adds a 4th note -> no clean glide mapping
+    await holdKey(page, 'd');
     const events = await audioEventsSince(page, mark);
 
-    const stopped = events.filter((e) => e.type === 'stop');
-    const started = events.filter((e) => e.type === 'start').map((e) => e.freq).sort((a, b) => a - b);
-    expect(stopped.length).toBeGreaterThan(0);
-    expect(started).toEqual(expectedChordFrequencies(0, 0, 'KeyD'));
+    expect(stopped).toHaveLength(0); // nothing dropped out, so nothing should stop
+    expect(eventFreqs(events, 'stop')).toHaveLength(0);
+    expect(eventFreqs(events, 'start')).toEqual(started);
 
     await releaseKey(page, 'd');
     await releaseKey(page, 'j');
@@ -50,13 +57,14 @@ test.describe('variants', () => {
   test('M7 depends on the base chord quality: minor degree gets a minor 7th', async ({ page }) => {
     await holdKey(page, 'i'); // degree 1, ii, minor triad
 
+    const before = chordMidiNotes(0, 1, 'KeyS');
+    const after = chordMidiNotes(0, 1, 'KeyD');
+    const { started } = expectedTransition(before, after);
+
     const mark = await markAudio(page);
     await holdKey(page, 'd');
-    const started = (await audioEventsSince(page, mark))
-      .filter((e) => e.type === 'start')
-      .map((e) => e.freq)
-      .sort((a, b) => a - b);
-    expect(started).toEqual(expectedChordFrequencies(0, 1, 'KeyD'));
+    const events = await audioEventsSince(page, mark);
+    expect(eventFreqs(events, 'start')).toEqual(started);
 
     await releaseKey(page, 'd');
     await releaseKey(page, 'i');
@@ -65,34 +73,35 @@ test.describe('variants', () => {
   test('M7 over the diminished vii° button gives a half-diminished (m7♭5)', async ({ page }) => {
     await holdKey(page, ';'); // degree 6, vii°, diminished triad
 
+    const before = chordMidiNotes(0, 6, 'KeyS');
+    const after = chordMidiNotes(0, 6, 'KeyD');
+    const { started } = expectedTransition(before, after);
+
     const mark = await markAudio(page);
     await holdKey(page, 'd');
-    const started = (await audioEventsSince(page, mark))
-      .filter((e) => e.type === 'start')
-      .map((e) => e.freq)
-      .sort((a, b) => a - b);
-    expect(started).toEqual(expectedChordFrequencies(0, 6, 'KeyD'));
+    const events = await audioEventsSince(page, mark);
+    expect(eventFreqs(events, 'start')).toEqual(started);
 
     await releaseKey(page, 'd');
     await releaseKey(page, ';');
   });
 
-  test('releasing the variant while the chord is still held glides back to the plain triad', async ({
+  test('releasing the variant while the chord is still held swaps back to the plain triad', async ({
     page,
   }) => {
     await holdKey(page, 'j');
     await holdKey(page, 'w'); // flip to minor
 
+    const before = chordMidiNotes(0, 0, 'KeyW');
+    const after = chordMidiNotes(0, 0, 'KeyS'); // back to plain (neutral) triad
+    const { started, stopped } = expectedTransition(before, after);
+
     const mark = await markAudio(page);
-    await releaseKey(page, 'w'); // back to plain (neutral) triad -- still 3 notes, should glide
+    await releaseKey(page, 'w');
     const events = await audioEventsSince(page, mark);
 
-    expect(events.filter((e) => e.type === 'start')).toHaveLength(0);
-    const glideTargets = events
-      .filter((e) => e.type === 'glide')
-      .map((e) => e.target)
-      .sort((a, b) => a - b);
-    expect(glideTargets).toEqual(expectedChordFrequencies(0, 0, 'KeyS'));
+    expect(eventFreqs(events, 'start')).toEqual(started);
+    expect(eventFreqs(events, 'stop')).toEqual(stopped);
 
     await releaseKey(page, 'j');
   });

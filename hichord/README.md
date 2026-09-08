@@ -84,9 +84,11 @@ Run through this after any change, in each target browser (see below):
 2. Hold a chord button (mouse, then touch if available) — you should hear a
    triad start with a short attack, and the button should light up.
 3. While still holding it, hold a variant button — the sound should shift
-   (not click/pop or double-trigger) to the modified chord; release the
-   variant, it should glide back to the plain triad while the chord button
-   is still held.
+   (not click/pop or double-trigger) to the modified chord: notes shared
+   with the plain triad keep sounding without interruption, only the
+   note(s) the variant actually changes should fade out/in; release the
+   variant and the same thing should happen in reverse, back to the plain
+   triad, while the chord button is still held.
 4. Release the chord button — sound should fade out (not cut abruptly).
 5. Change key with `←`/`→` (and the on-screen arrows) — the 7 chord-button
    labels should update to the new key's chord names.
@@ -99,7 +101,10 @@ Run through this after any change, in each target browser (see below):
 8. Tap "Clear loop" — playback (and whatever it was last sounding) should
    stop immediately.
 9. Hold two chord buttons at once — you should hear both chords together,
-   not just the most recently pressed one.
+   not just the most recently pressed one, and the first one's notes should
+   keep sounding uninterrupted (no cut/re-attack) as the second layers in;
+   releasing the second should drop only its own notes and leave the first
+   untouched.
 10. Switch away from the tab/app mid-hold (e.g. Cmd+Tab) and back — no note
    should be left stuck on, and no recording left stuck in progress.
 11. On mobile: rapid taps across chord/variant buttons shouldn't select

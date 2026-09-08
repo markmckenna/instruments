@@ -160,17 +160,18 @@ button {
   font-size: 0.7rem;
 }
 
-/* --- Chord keyboard: a clean grid, staggered by column to mirror physical
-   key rows -- I/O/P (top) sit centered over the J/K/L/; (bottom) boundaries,
-   same as the real keys they're named after. */
+/* --- Chord keyboard: a clean grid, 12 columns (LCM of 3 and 4) so each row's
+   buttons divide the full width evenly -- I/O/P get 4 columns apiece on top,
+   J/K/L/; get 3 apiece on the bottom -- rather than the top row's 3 buttons
+   only spanning part of the width with dead space beside them. */
 
 .chord-keyboard {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(12, 1fr);
   grid-template-rows: repeat(2, minmax(3.4rem, 1fr));
   grid-template-areas:
-    ".    .    i    i    o    o    p    p"
-    "j    j    k    k    l    l    semi semi";
+    "i    i    i    i    o    o    o    o    p    p    p    p"
+    "j    j    j    k    k    k    l    l    l    semi semi semi";
   gap: 0.4rem;
   flex: 1;
 }

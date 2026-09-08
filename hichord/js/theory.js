@@ -86,10 +86,15 @@ export function midiToFreq(midi) {
  */
 export function buildChord(keyPc, degreeIndex, variantCode, baseMidi = 60) {
   const degree = DEGREES[degreeIndex];
-  const rootPc = (keyPc + degree.interval) % 12;
   const variant = VARIANTS[variantCode] || VARIANTS.KeyS;
   const offsets = variant.offsets(degree.quality);
-  const rootMidi = baseMidi + rootPc;
+  // No modulo here (unlike chordRootName's pitch-class-only naming below):
+  // DEGREES' intervals are 0-11 and already strictly increasing with degree
+  // index, so anchoring the root at baseMidi + keyPc + interval (rather than
+  // wrapping back into a single octave band) guarantees the tonic (interval
+  // 0) is always the lowest-rooted chord for the current key, and each
+  // further degree in the JIKOLP; sequence sits higher than the last.
+  const rootMidi = baseMidi + keyPc + degree.interval;
   return offsets.map((o) => rootMidi + o);
 }
 

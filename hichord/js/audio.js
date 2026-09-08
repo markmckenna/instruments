@@ -58,8 +58,6 @@ export const VOICES = [
   },
 ];
 
-const CROSSFADE = 0.015; // seconds; quick cutover between chords on the same voice, avoids clicks
-
 export class AudioEngine {
   constructor() {
     this.ctx = null;
@@ -142,60 +140,48 @@ export class AudioEngine {
   }
 
   /**
-   * Start (or immediately replace) the chord sounding on `voiceId`. Voice
-   * ids are independent of each other -- see the module comment above.
+   * Make `voiceId` sound exactly `midiNotes`, however it got there -- a new
+   * chord button added to (or dropped from) whatever's already held, a
+   * variant change, a key change, or nothing sounding yet. Every note is
+   * voiced fully independently: a note already sounding on this voice that's
+   * still wanted (same MIDI pitch) is left completely untouched -- no
+   * retrigger, no re-envelope, not even a re-pitch -- so it never cuts or
+   * re-attacks just because the rest of the chord around it changed. Notes
+   * no longer wanted are released individually; newly-wanted notes attack
+   * fresh, layered on top. Voice ids are independent of each other -- see
+   * the module comment above.
    */
   playChord(voiceId, midiNotes) {
     this.unlock();
-    const hadActive = this.active.has(voiceId);
-    if (hadActive) this._release(voiceId, CROSSFADE);
-    const when = this.ctx.currentTime + (hadActive ? CROSSFADE : 0);
-    this.active.set(voiceId, midiNotes.map((m) => this._playNote(m, this.voice, when, midiNotes.length)));
-  }
+    const existing = this.active.get(voiceId) || [];
+    const target = new Set(midiNotes);
+    const keep = existing.filter((note) => target.has(note.midi));
+    const drop = existing.filter((note) => !target.has(note.midi));
+    const already = new Set(keep.map((note) => note.midi));
+    // De-dupe here too (not just trust the caller): if two chord buttons
+    // merged into `midiNotes` happen to share a pitch, it must attack once,
+    // not once per button, so that pitch's loudness doesn't stack.
+    const toAdd = midiNotes.filter((m, i) => !already.has(m) && midiNotes.indexOf(m) === i);
 
-  /**
-   * Re-pitch the chord already sounding on `voiceId` in place when possible
-   * (e.g. a variant change while a chord button is held), for a smooth "live
-   * tweak" feel instead of a hard retrigger. Falls back to playChord() when
-   * there's nothing sounding yet on this voice, or when the note count
-   * changed (no clean 1:1 mapping to glide between).
-   */
-  updateChord(voiceId, midiNotes) {
-    const notes = this.active.get(voiceId);
-    if (!this.ctx || !notes || notes.length === 0) {
-      this.playChord(voiceId, midiNotes);
-      return;
-    }
-    if (midiNotes.length === notes.length) {
-      const now = this.ctx.currentTime;
-      notes.forEach((note, i) => {
-        note.midi = midiNotes[i];
-        note.oscs.forEach(({ node, octave }) => {
-          node.frequency.setTargetAtTime(this._freqFor(note.midi, octave), now, 0.02);
-        });
-      });
-    } else {
-      this.playChord(voiceId, midiNotes);
-    }
+    const now = this.ctx.currentTime;
+    drop.forEach((note) => this._releaseNote(note, this.voice.release, now));
+    const added = toAdd.map((m) => this._playNote(m, this.voice, now, midiNotes.length));
+    this.active.set(voiceId, keep.concat(added));
   }
 
   /** Release whatever's sounding on `voiceId`, using the current voice preset's natural release. */
   stopChord(voiceId) {
     if (!this.ctx || !this.active.has(voiceId)) return;
-    this._release(voiceId, this.voice.release);
+    const now = this.ctx.currentTime;
+    this.active.get(voiceId).forEach((note) => this._releaseNote(note, this.voice.release, now));
     this.active.delete(voiceId);
   }
 
-  _release(voiceId, releaseTime) {
-    const notes = this.active.get(voiceId);
-    if (!notes) return;
-    const ctx = this.ctx;
-    const now = ctx.currentTime;
-    notes.forEach(({ oscs, gain }) => {
-      gain.gain.cancelScheduledValues(now);
-      gain.gain.setValueAtTime(gain.gain.value, now);
-      gain.gain.linearRampToValueAtTime(0.0001, now + releaseTime);
-      oscs.forEach(({ node }) => node.stop(now + releaseTime + 0.02));
-    });
+  _releaseNote(note, releaseTime, now) {
+    const { oscs, gain } = note;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(gain.gain.value, now);
+    gain.gain.linearRampToValueAtTime(0.0001, now + releaseTime);
+    oscs.forEach(({ node }) => node.stop(now + releaseTime + 0.02));
   }
 }

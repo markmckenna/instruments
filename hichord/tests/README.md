@@ -17,11 +17,10 @@ Or standalone: `npm ci && npx playwright install chromium && npx playwright test
 
 - `support/fixtures.js` provides the `test`/`expect` every spec imports. It
   installs a small Web Audio probe (`page.addInitScript`) before the app's
-  own scripts run, wrapping `OscillatorNode.start/stop` and
-  `AudioParam.setTargetAtTime` so tests can assert on what the audio engine
-  actually did (`markAudio` / `audioEventsSince`) instead of only on DOM
-  state. It also fails any test whose page logged a console error or an
-  uncaught exception.
+  own scripts run, wrapping `OscillatorNode.start/stop` so tests can assert
+  on what the audio engine actually did (`markAudio` / `audioEventsSince`)
+  instead of only on DOM state. It also fails any test whose page logged a
+  console error or an uncaught exception.
 - `support/expected-audio.js` computes the frequencies a chord *should*
   produce by importing `js/theory.js` and `js/audio.js` directly (both are
   dependency-free and DOM-free, so they run fine under Node) rather than
@@ -38,13 +37,15 @@ Or standalone: `npm ci && npx playwright install chromium && npx playwright test
 ## What's covered
 
 - `chords.spec.js` -- each chord button's triad, release, and polyphony
-  (multiple buttons held at once).
-- `variants.spec.js` -- the QWE/ASD/ZXC grid: glide-in-place when the note
-  count doesn't change, fallback retrigger when it does, and
-  quality-dependent variants (M7, Mm flip) over major/minor/diminished bases.
+  (multiple buttons held at once, each one's notes independent of the
+  other's).
+- `variants.spec.js` -- the QWE/ASD/ZXC grid: a variant change only
+  starts/stops the notes that actually differ, leaving any note shared with
+  the previous chord sounding untouched, plus quality-dependent variants
+  (M7, Mm flip) over major/minor/diminished bases.
 - `key-voice.spec.js` -- key switching relabels every chord button and
-  re-pitches a held chord; voice switching changes the actual oscillator
-  layout used.
+  reconciles a held chord's notes by exact pitch; voice switching changes
+  the actual oscillator layout used.
 - `loop.spec.js` -- record/release starts real looping playback on the real
   clock, live play mixes with it, Clear loop actually stops the scheduler.
 - `keyboard-and-safety.spec.js` -- OS key-repeat is ignored, and the

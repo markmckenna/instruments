@@ -5,15 +5,15 @@
 //     exception (a page that "looks right" but is quietly erroring is a bug)
 //   - has a Web Audio probe installed before the app's own scripts run, so
 //     tests can assert on what the audio engine actually did (which
-//     oscillators started/stopped, and any live frequency glides) instead of
-//     only on DOM state. This is what makes these *integration* tests rather
+//     oscillators started/stopped, and at what frequencies) instead of only
+//     on DOM state. This is what makes these *integration* tests rather
 //     than DOM smoke tests -- they exercise the real audio.js/theory.js/
 //     input.js/loop.js code paths end to end in a real browser.
 import { test as base, expect } from '@playwright/test';
 
 // Runs inside the page, before HiChord's own scripts. Wraps the handful of
-// Web Audio calls the app actually makes so every start/stop/glide is logged
-// to window.__audioEvents, in order, without changing what they actually do.
+// Web Audio calls the app actually makes so every start/stop is logged to
+// window.__audioEvents, in order, without changing what they actually do.
 function installAudioProbe() {
   window.__audioEvents = [];
   // Rounded to hundredths of a Hz to match support/expected-audio.js -- see
@@ -42,15 +42,6 @@ function installAudioProbe() {
     window.__audioEvents.push({ type: 'stop', freq: round(this.frequency.value) });
     return origStop.apply(this, args);
   };
-
-  // AudioEngine.updateChord() is the *only* caller of setTargetAtTime in the
-  // app (see DECISIONS.md "Variant keys glide, not retrigger") -- hooking it
-  // here is unambiguous evidence a glide happened rather than a retrigger.
-  const origSetTarget = AudioParam.prototype.setTargetAtTime;
-  AudioParam.prototype.setTargetAtTime = function (target, ...rest) {
-    window.__audioEvents.push({ type: 'glide', target: round(target) });
-    return origSetTarget.call(this, target, ...rest);
-  };
 }
 
 export const test = base.extend({
@@ -77,7 +68,7 @@ export async function markAudio(page) {
   return page.evaluate(() => window.__audioEvents.length);
 }
 
-/** Every probe event (start/stop/glide) recorded since `mark`, in order. */
+/** Every probe event (start/stop) recorded since `mark`, in order. */
 export async function audioEventsSince(page, mark) {
   return page.evaluate((from) => window.__audioEvents.slice(from), mark);
 }

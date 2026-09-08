@@ -49,7 +49,7 @@ function currentSound() {
 function refreshSound() {
   const sound = currentSound();
   if (sound) {
-    engine.updateChord('live', sound.notes);
+    engine.playChord('live', sound.notes);
     recorder.recordEvent('on', sound.notes);
   } else {
     engine.stopChord('live');

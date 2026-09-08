@@ -32,14 +32,41 @@ function expandToOscillatorFrequencies(midiNotes, voiceIndex) {
   return freqs.sort((a, b) => a - b);
 }
 
-/** Expected oscillator frequencies for one held chord button + variant. */
-export function expectedChordFrequencies(keyPc, degreeIndex, variantCode, voiceIndex = 0) {
-  return expandToOscillatorFrequencies(buildChord(keyPc, degreeIndex, variantCode), voiceIndex);
+/** MIDI notes for one held chord button + variant. */
+export function chordMidiNotes(keyPc, degreeIndex, variantCode) {
+  return buildChord(keyPc, degreeIndex, variantCode);
 }
 
-/** Expected oscillator frequencies for several chord buttons held at once (see input.js's currentSound()). */
-export function expectedMergedFrequencies(keyPc, degreeIndices, variantCode, voiceIndex = 0) {
+/** MIDI notes for several chord buttons held at once, deduped (see input.js's currentSound()). */
+export function mergedMidiNotes(keyPc, degreeIndices, variantCode) {
   const notes = new Set();
   degreeIndices.forEach((d) => buildChord(keyPc, d, variantCode).forEach((n) => notes.add(n)));
-  return expandToOscillatorFrequencies(Array.from(notes), voiceIndex);
+  return Array.from(notes);
+}
+
+/** Expected oscillator frequencies for one held chord button + variant. */
+export function expectedChordFrequencies(keyPc, degreeIndex, variantCode, voiceIndex = 0) {
+  return expandToOscillatorFrequencies(chordMidiNotes(keyPc, degreeIndex, variantCode), voiceIndex);
+}
+
+/** Expected oscillator frequencies for several chord buttons held at once. */
+export function expectedMergedFrequencies(keyPc, degreeIndices, variantCode, voiceIndex = 0) {
+  return expandToOscillatorFrequencies(mergedMidiNotes(keyPc, degreeIndices, variantCode), voiceIndex);
+}
+
+/**
+ * Expected start/stop oscillator events for a transition between two held
+ * MIDI note sets on the same voice, mirroring AudioEngine.playChord()'s
+ * exact-pitch diff (see DECISIONS.md "Every note voiced independently"): a
+ * pitch present both before and after keeps sounding untouched -- no start,
+ * no stop -- only pitches that dropped out stop, and only pitches that are
+ * newly wanted start.
+ */
+export function expectedTransition(beforeNotes, afterNotes, voiceIndex = 0) {
+  const before = new Set(beforeNotes);
+  const after = new Set(afterNotes);
+  return {
+    started: expandToOscillatorFrequencies(afterNotes.filter((n) => !before.has(n)), voiceIndex),
+    stopped: expandToOscillatorFrequencies(beforeNotes.filter((n) => !after.has(n)), voiceIndex),
+  };
 }

@@ -1,10 +1,10 @@
 // Key and voice controls: switching key relabels every chord button (and,
-// if a chord is currently held, re-pitches it in place -- same glide path as
-// a variant change, see variants.spec.js); switching voice changes the
-// oscillator layout actually used to sound a held chord.
+// if a chord is currently held, reconciles it in place by exact pitch -- same
+// diff path as a variant change, see variants.spec.js); switching voice
+// changes the oscillator layout actually used to sound a held chord.
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
-import { expectedChordFrequencies } from './support/expected-audio.js';
+import { chordMidiNotes, expectedChordFrequencies, expectedTransition } from './support/expected-audio.js';
 import { CHORD_KEYS, DEGREES, CIRCLE_OF_FIFTHS, chordRootName } from '../js/theory.js';
 import { QUALITY_SUFFIX } from '../js/ui.js';
 
@@ -30,16 +30,21 @@ test('changing key relabels every chord button', async ({ page }) => {
   }
 });
 
-test('changing key while a chord is held re-pitches it in place (glide)', async ({ page }) => {
+test('changing key while a chord is held keeps any shared pitch sounding and swaps the rest', async ({
+  page,
+}) => {
   await holdKey(page, 'j');
+
+  const before = chordMidiNotes(CIRCLE_OF_FIFTHS[0].pc, 0, 'KeyS');
+  const after = chordMidiNotes(CIRCLE_OF_FIFTHS[1].pc, 0, 'KeyS');
+  const { started, stopped } = expectedTransition(before, after);
 
   const mark = await markAudio(page);
   await page.click('[data-action="key-next"]');
   const events = await audioEventsSince(page, mark);
 
-  expect(events.filter((e) => e.type === 'start')).toHaveLength(0);
-  const glideTargets = events.filter((e) => e.type === 'glide').map((e) => e.target).sort((a, b) => a - b);
-  expect(glideTargets).toEqual(expectedChordFrequencies(CIRCLE_OF_FIFTHS[1].pc, 0, 'KeyS'));
+  expect(events.filter((e) => e.type === 'start').map((e) => e.freq).sort((a, b) => a - b)).toEqual(started);
+  expect(events.filter((e) => e.type === 'stop').map((e) => e.freq).sort((a, b) => a - b)).toEqual(stopped);
 
   await releaseKey(page, 'j');
 });
