@@ -4,10 +4,16 @@
 import { CHORD_KEYS, VARIANTS, CIRCLE_OF_FIFTHS, buildChord } from './theory.js';
 import { AudioEngine } from './audio.js';
 import { LoopRecorder } from './loop.js';
+import { Metronome } from './metronome.js';
+import { Tempo } from './tempo.js';
 import { renderUI } from './ui.js';
 
 export const engine = new AudioEngine();
-export const recorder = new LoopRecorder(engine);
+// Shared by the loop recorder (loop-length rounding, note quantizing) and
+// the metronome click (beat timing) -- see tempo.js.
+export const tempo = new Tempo();
+export const recorder = new LoopRecorder(engine, tempo);
+export const metronome = new Metronome(engine, tempo);
 
 const state = {
   keyIndex: 0, // index into CIRCLE_OF_FIFTHS
@@ -65,6 +71,9 @@ export function updateUI() {
     heldBases,
     heldVariant: heldVariantStack[heldVariantStack.length - 1] || null,
     loopState: recorder.state,
+    bpm: tempo.bpm,
+    quantizeDivision: tempo.quantizeDivision,
+    clickEnabled: metronome.enabled,
   });
 }
 
@@ -100,6 +109,19 @@ function changeKey(delta) {
 }
 function changeVoice(delta) {
   engine.cycleVoice(delta);
+  updateUI();
+}
+function changeBpm(delta) {
+  tempo.setBpm(tempo.bpm + delta);
+  updateUI();
+}
+function changeQuantize(delta) {
+  if (delta > 0) tempo.doubleQuantize();
+  else tempo.halveQuantize();
+  updateUI();
+}
+function toggleClick() {
+  metronome.toggle();
   updateUI();
 }
 
@@ -176,6 +198,11 @@ export function initPointerControls(root) {
   root.querySelector('[data-action="key-next"]').addEventListener('click', () => changeKey(1));
   root.querySelector('[data-action="voice-prev"]').addEventListener('click', () => changeVoice(-1));
   root.querySelector('[data-action="voice-next"]').addEventListener('click', () => changeVoice(1));
+  root.querySelector('[data-action="bpm-down"]').addEventListener('click', () => changeBpm(-1));
+  root.querySelector('[data-action="bpm-up"]').addEventListener('click', () => changeBpm(1));
+  root.querySelector('[data-action="quantize-down"]').addEventListener('click', () => changeQuantize(-1));
+  root.querySelector('[data-action="quantize-up"]').addEventListener('click', () => changeQuantize(1));
+  root.querySelector('[data-action="click-toggle"]').addEventListener('click', () => toggleClick());
   bindPress(root.querySelector('[data-action="record"]'), () => toggleRecord(true), () => toggleRecord(false));
   root.querySelector('[data-action="clear-loop"]').addEventListener('click', () => {
     recorder.clear();

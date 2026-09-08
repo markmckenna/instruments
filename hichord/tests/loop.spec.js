@@ -4,6 +4,43 @@
 // see DECISIONS.md "Loop recorder" for why.
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
+import { AudioEngine } from '../js/audio.js';
+
+test.describe('AudioEngine._envelopeValueAt (pure logic, no browser/audio needed)', () => {
+  // Regression coverage for DECISIONS.md's "Release reads the envelope
+  // analytically, not AudioParam.value" -- the bug that made some (not all)
+  // loop playouts decay to silence early: releasing a note before its
+  // attack/decay finished used to read the *live* gain value (correct only
+  // at real "now"), which was stale for a release scheduled ahead on the
+  // audio clock. _envelopeValueAt must reproduce whatever _playNote's own
+  // ramps would produce at any given time, independent of the real clock.
+  const engine = new AudioEngine();
+  const note = {
+    attackStart: 10,
+    attackEnd: 10.1, // 0.1s attack
+    decayEnd: 10.3, // 0.2s decay
+    level: 1,
+    sustainLevel: 0.6,
+  };
+
+  test('before the attack starts, the level is 0', () => {
+    expect(engine._envelopeValueAt(note, 9)).toBe(0);
+    expect(engine._envelopeValueAt(note, 10)).toBe(0);
+  });
+
+  test('mid-attack, the level is partway to the peak', () => {
+    expect(engine._envelopeValueAt(note, 10.05)).toBeCloseTo(0.5, 5);
+  });
+
+  test('mid-decay, the level is partway from the peak down to sustain', () => {
+    expect(engine._envelopeValueAt(note, 10.2)).toBeCloseTo(0.8, 5);
+  });
+
+  test('once decay finishes, the level holds at sustain indefinitely', () => {
+    expect(engine._envelopeValueAt(note, 10.3)).toBeCloseTo(0.6, 5);
+    expect(engine._envelopeValueAt(note, 50)).toBeCloseTo(0.6, 5);
+  });
+});
 
 test('recording a note then releasing Tab loops it, and Clear loop stops it', async ({ page }) => {
   const recordBtn = page.locator('[data-action="record"]');

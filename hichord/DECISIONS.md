@@ -168,11 +168,16 @@ they are below.
   loop playback that lagged behind an external tempo. Live play (`input.js`)
   never passes `when`, so it's unaffected — a live keypress should always
   sound immediately, not scheduled ahead.
-- No on-screen tempo/bar-count control — 120bpm and free-length-snapped-to-
-  beat is what the README specifies, so that's all that's implemented.
-  Added one small affordance beyond the README: a "Clear loop" button, since
-  there's no mobile-friendly equivalent otherwise for "stop looping
-  entirely" once one has been recorded.
+- No on-screen bar-count control — loop length is still whatever you
+  actually played, free-length-snapped-to-beat, not a fixed number of bars;
+  the README only specifies bpm and beat-snapping, not a bar-count mode.
+  bpm itself *is* now user-adjustable (see "Tempo, click track, and
+  quantize" below) — that started as a fixed 120 the README specifies as a
+  default, and became a control once tuning it turned out to matter for
+  getting loop timing to actually feel right. Added one small affordance
+  beyond the README: a "Clear loop" button, since there's no mobile-friendly
+  equivalent otherwise for "stop looping entirely" once one has been
+  recorded.
 
 ## Audio engine
 
@@ -211,6 +216,81 @@ they are below.
   per-chord normalization doesn't fully catch — now more necessary than
   before since independent voices (multiple held chords, live-over-loop) can
   sum together.
+- **Release reads the envelope analytically, not `AudioParam.value`**:
+  `_releaseNote` needs to know the gain a note is *at* when it starts
+  releasing, so it can ramp down from there instead of jumping. It used to
+  read `gain.gain.value`, which only reflects the value *right now* (real
+  wall-clock time) — but a release can be scheduled for a future point on
+  the audio clock (loop playback schedules ahead, see "Scheduling uses the
+  standard Web Audio 'lookahead' pattern" below), and if a note's own
+  attack/decay hadn't finished yet by the time the release was scheduled,
+  `.value` would be a stale, too-low reading that then got locked in right
+  as the real curve was still climbing — an audible snap-down, which could
+  look like "the note already decayed to silence" on whichever loop
+  playouts happened to have a short enough hold for this to bite (longer
+  holds have already settled into sustain by release time, so weren't
+  affected — matching a bug report of "on some, not all, playouts"). Every
+  note now carries its own attack/decay timing and target levels
+  (`attackStart`/`attackEnd`/`decayEnd`/`level`/`sustainLevel`, set in
+  `_playNote`), and `_releaseNote` evaluates that curve at the exact release
+  time (`_envelopeValueAt`) instead of asking the AudioParam what it thinks
+  "now" is.
+- **The metronome click is not a voice**: `AudioEngine.playClick()` is a
+  separate, minimal code path (one plain oscillator, no filter, no per-chord
+  gain normalization, no voice preset) rather than routed through
+  `VOICES`/`playChord` — a click is a short unpitched percussive blip, not a
+  musical note, so none of the chord-voicing machinery (attack/decay/sustain
+  shaping, chordSize-based level, multi-oscillator detuning) applies or is
+  worth reusing here.
+
+## Tempo, click track, and quantize
+
+- **`Tempo` (`js/tempo.js`) is the single shared source of truth for bpm and
+  quantize resolution** — both `LoopRecorder` (loop-length rounding, note
+  quantizing) and `Metronome` (click timing) hold a reference to the same
+  instance, so a bpm change from the UI applies to whichever of them is
+  running immediately, with nothing to keep in sync manually. Kept
+  dependency-free and pure, like `theory.js`, since it's just arithmetic —
+  no DOM or Web Audio needed to reason about it or test it.
+- **bpm is now a UI control, not a fixed constant**: it started as a fixed
+  120 (the README's default), but tuning it turned out to matter for making
+  loop timing actually feel locked to how you play — see the loop-length
+  rounding fix above. Range clamped to 40–240 (outside that band a "beat"
+  stops being a useful unit either for playing along or for the loop-length
+  snap to mean anything). Changing bpm doesn't retroactively rescale an
+  *already-recorded* loop's timing (its events and length are baked in
+  seconds, not beats) — it only affects the click's tempo and future
+  recordings' beat-snapping/quantizing.
+- **Quantize snaps recorded note timing to a grid, live play is never
+  touched**: `LoopRecorder.recordEvent()` snaps each event's timestamp to
+  the nearest `Tempo.quantizeSeconds` step before it's stored, by
+  construction — quantization only ever happens to what gets *recorded*, so
+  it fixes loop timing without changing how live play actually sounds or
+  feels as you play it. Default 1/32 (a 32nd note): fine enough to tidy up
+  ordinary sloppy timing without visibly moving a deliberately-placed note.
+  The up/down control doubles/halves the grid resolution (1/32 → 1/64 finer,
+  1/32 → 1/16 coarser) rather than offering an arbitrary number, since
+  "twice as fine" is the musically meaningful step (matches how note
+  durations themselves relate) and keeps the control to two buttons.
+  Bounded to 1 (whole note) through 1/128, past which either end stops being
+  a useful grid.
+- **The click is a free-running practice metronome, independent of loop
+  record/playback state**: `Metronome` starts counting beats from whenever
+  it's turned on and keeps clicking regardless of whether you're recording,
+  looping, or doing neither — the point is to give you a tempo reference
+  *before* and *while* you play, not only to mark time during playback.
+  It intentionally does not try to phase-lock to `LoopRecorder`'s own loop
+  boundary; that would need the two schedulers to coordinate for a benefit
+  (staying in the same phase as a loop you may not even have recorded yet)
+  that doesn't clearly outweigh the simplicity of two independent, freely
+  startable/stoppable schedulers.
+- Same "look a little ahead on a short interval, then let the real audio
+  clock trigger it" lookahead pattern as the loop scheduler (see Loop
+  recorder above) — kept as its own small scheduler in `metronome.js` rather
+  than factored out into one shared with `loop.js`'s, since replaying a
+  recorded event list with wraparound and free-running "fire the next beat"
+  are different enough shapes that sharing one abstraction would obscure
+  more than the ~10 lines of duplication it would save.
 
 ## Visual design
 
@@ -228,7 +308,10 @@ they are below.
   its three top buttons as gray ("Key & Settings"), yellow ("Sounds &
   Effects"), and red ("Modes & Tempo") — those map onto our Key control,
   Voice control, and loop/record control (a mode) respectively, each now
-  tinted accordingly. The general highlight/active color moved from the
+  tinted accordingly. The Tempo and Quantize controls are tinted the same
+  red as loop/record, rather than getting their own color, since they're
+  the same "Modes & Tempo" concept on the real device, not a fourth
+  independent one. The general highlight/active color moved from the
   previous arbitrary teal to a blue, after "Cosmic Blue" (the currently-
   shipping hardware edition). Exact photos of the device's chord-button
   coloring weren't available at the time of writing, so those buttons stay a
@@ -275,7 +358,7 @@ they are below.
 - No octave-shift control (real HiChord has one on its joystick; the
   README's spec for this experiment doesn't mention one).
 - No multi-track looper layering (recording overdubs into a loop, or
-  stacking more than one loop) or tempo control or MIDI I/O — live play can
-  now be overlaid live and can play over a running loop (see Loop recorder
-  above), but the loop itself still holds only one recorded take.
+  stacking more than one loop) or MIDI I/O — live play can now be overlaid
+  live and can play over a running loop (see Loop recorder above), but the
+  loop itself still holds only one recorded take.
 - No shared code with other instruments yet — see `../PROCESS.md`.

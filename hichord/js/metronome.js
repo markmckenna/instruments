@@ -1,0 +1,56 @@
+// Optional practice click track: one low "tick" per beat (see
+// AudioEngine.playClick) at the shared Tempo's current bpm, independent of
+// loop recording/playback -- lets you find/hold a tempo before or while you
+// record, rather than only being able to judge it after the fact from how a
+// loop plays back. Same "look a little ahead, then let the real audio clock
+// trigger it" scheduling pattern as LoopRecorder (see loop.js) -- kept as its
+// own small scheduler rather than sharing one, since a free-running click
+// (just "fire the next beat") is simpler than replaying a recorded event
+// list with wraparound.
+const LOOKAHEAD = 0.1; // seconds
+const TICK_MS = 25;
+
+export class Metronome {
+  constructor(engine, tempo) {
+    this.engine = engine;
+    this.tempo = tempo;
+    this.enabled = false;
+    this._timer = null;
+    this._startCtxTime = 0;
+    this._nextBeat = 0;
+  }
+
+  toggle() {
+    if (this.enabled) this.disable();
+    else this.enable();
+    return this.enabled;
+  }
+
+  enable() {
+    if (this.enabled) return;
+    this.engine.unlock(); // idempotent; ensures ctx exists even if nothing has sounded yet
+    this.enabled = true;
+    this._startCtxTime = this.engine.ctx.currentTime;
+    this._nextBeat = 0;
+    this._timer = setInterval(() => this._tick(), TICK_MS);
+  }
+
+  disable() {
+    this.enabled = false;
+    if (this._timer) {
+      clearInterval(this._timer);
+      this._timer = null;
+    }
+  }
+
+  _tick() {
+    const ctxNow = this.engine.ctx.currentTime;
+    const horizon = ctxNow + LOOKAHEAD - this._startCtxTime;
+    // Bounded by construction: the beat counter only advances when the beat
+    // it points at is due, and we stop as soon as the next one isn't yet.
+    while (this._nextBeat * this.tempo.beatSeconds <= horizon) {
+      this.engine.playClick(this._startCtxTime + this._nextBeat * this.tempo.beatSeconds);
+      this._nextBeat += 1;
+    }
+  }
+}

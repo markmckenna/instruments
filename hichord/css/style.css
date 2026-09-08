@@ -86,9 +86,13 @@ button {
   padding: 0.3rem;
   border-left: 3px solid var(--group-accent);
 }
-/* Key = gray, Voice = yellow, matching the real device's top button colors. */
+/* Key = gray, Voice = yellow, Tempo/Quantize = red (grouped with loop/record
+   under the real device's "Modes & Tempo" button), matching the real
+   device's top button colors. */
 .control-group[aria-label="Key"] { --group-accent: var(--accent-key); }
 .control-group[aria-label="Voice"] { --group-accent: var(--accent-voice); }
+.control-group[aria-label="Tempo"],
+.control-group[aria-label="Quantize"] { --group-accent: var(--accent-mode); }
 
 .pill-btn {
   width: 2rem;
@@ -102,6 +106,9 @@ button {
   flex-shrink: 0;
 }
 .pill-btn:active { background: var(--group-accent, var(--accent)); color: var(--key-text-active); }
+/* Toggled state (metronome click on/off) -- unlike :active (only during the
+   press itself), this persists while the click is enabled. */
+.pill-btn.active { background: var(--group-accent, var(--accent)); color: var(--key-text-active); }
 
 .display {
   display: flex;

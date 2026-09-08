@@ -8,7 +8,7 @@ import { CHORD_KEYS, DEGREES, chordRootName } from './theory.js';
 // single source of truth this module renders from, instead of a copy.
 export const QUALITY_SUFFIX = { maj: '', min: 'm', dim: '°' };
 
-export function renderUI({ key, voice, heldBases, heldVariant, loopState }) {
+export function renderUI({ key, voice, heldBases, heldVariant, loopState, bpm, quantizeDivision, clickEnabled }) {
   document.querySelectorAll('[data-base]').forEach((el) => {
     const code = el.dataset.base;
     const degreeIndex = CHORD_KEYS.findIndex((k) => k.code === code);
@@ -28,6 +28,15 @@ export function renderUI({ key, voice, heldBases, heldVariant, loopState }) {
 
   const voiceLabel = document.querySelector('[data-display="voice"]');
   if (voiceLabel) voiceLabel.textContent = voice.name;
+
+  const bpmLabel = document.querySelector('[data-display="bpm"]');
+  if (bpmLabel) bpmLabel.textContent = bpm;
+
+  const quantizeLabel = document.querySelector('[data-display="quantize"]');
+  if (quantizeLabel) quantizeLabel.textContent = `1/${quantizeDivision}`;
+
+  const clickBtn = document.querySelector('[data-action="click-toggle"]');
+  if (clickBtn) clickBtn.classList.toggle('active', clickEnabled);
 
   const recordBtn = document.querySelector('[data-action="record"]');
   if (recordBtn) {

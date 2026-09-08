@@ -28,6 +28,23 @@
         </div>
         <button type="button" class="pill-btn" data-action="voice-next" aria-label="Next voice">&uarr;</button>
       </div>
+      <div class="control-group" aria-label="Tempo">
+        <button type="button" class="pill-btn" data-action="bpm-down" aria-label="Decrease tempo">&darr;</button>
+        <div class="display">
+          <span class="display-label">BPM</span>
+          <span class="display-value" data-display="bpm">120</span>
+        </div>
+        <button type="button" class="pill-btn" data-action="bpm-up" aria-label="Increase tempo">&uarr;</button>
+        <button type="button" class="pill-btn" data-action="click-toggle" aria-label="Toggle metronome click">&#9834;</button>
+      </div>
+      <div class="control-group" aria-label="Quantize">
+        <button type="button" class="pill-btn" data-action="quantize-down" aria-label="Coarser quantize">&darr;</button>
+        <div class="display">
+          <span class="display-label">Quantize</span>
+          <span class="display-value" data-display="quantize">1/32</span>
+        </div>
+        <button type="button" class="pill-btn" data-action="quantize-up" aria-label="Finer quantize">&uarr;</button>
+      </div>
     </header>
 
     <main class="stage">

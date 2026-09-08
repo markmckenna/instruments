@@ -136,7 +136,43 @@ export class AudioEngine {
       return { node: osc, octave: spec.octave || 0 };
     });
 
-    return { oscs, gain: noteGain, filter, midi };
+    // attackEnd/decayEnd/level/sustainLevel let _releaseNote() work out what
+    // the gain *should* be at any later release time analytically, instead
+    // of reading the AudioParam's live .value -- see _releaseNote().
+    return {
+      oscs,
+      gain: noteGain,
+      filter,
+      midi,
+      attackStart: when,
+      attackEnd: when + voice.attack,
+      decayEnd: when + voice.attack + voice.decay,
+      level,
+      sustainLevel: level * voice.sustain,
+    };
+  }
+
+  /**
+   * Play a single short, low, unpitched "tick" -- the metronome click (see
+   * js/metronome.js) -- through its own oscillator, independent of the
+   * chord voice system above (a click isn't a musical note: no ADSR preset,
+   * no per-chord level normalization, just a fixed short blip).
+   */
+  playClick(when) {
+    this.unlock();
+    const t = when ?? this.ctx.currentTime;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 90; // low -- distinct from any chord voice's register
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.6, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    osc.connect(gain);
+    gain.connect(this.master);
+    osc.start(t);
+    osc.stop(t + 0.06);
   }
 
   /**
@@ -189,9 +225,28 @@ export class AudioEngine {
 
   _releaseNote(note, releaseTime, at) {
     const { oscs, gain } = note;
+    // Read the gain analytically from the same attack/decay curve _playNote
+    // scheduled, rather than the AudioParam's live .value: `at` can be up to
+    // LOOKAHEAD (see loop.js) in the *future* relative to real "now" when
+    // this runs, so .value (which only reflects "now") would be stale for
+    // any note whose attack/decay hasn't finished by the time this is
+    // called -- cancelScheduledValues(at) + setValueAtTime(stale value, at)
+    // would then snap the gain to a wrong, too-low value right as the curve
+    // was still climbing, an audible drop that could look like "the note
+    // already decayed to zero" on whichever playouts happened to be short
+    // enough for this to bite.
     gain.gain.cancelScheduledValues(at);
-    gain.gain.setValueAtTime(gain.gain.value, at);
+    gain.gain.setValueAtTime(this._envelopeValueAt(note, at), at);
     gain.gain.linearRampToValueAtTime(0.0001, at + releaseTime);
     oscs.forEach(({ node }) => node.stop(at + releaseTime + 0.02));
+  }
+
+  /** What _playNote()'s attack/decay/sustain ramp evaluates to at time `t`. */
+  _envelopeValueAt(note, t) {
+    const { attackStart, attackEnd, decayEnd, level, sustainLevel } = note;
+    if (t <= attackStart) return 0;
+    if (t < attackEnd) return level * ((t - attackStart) / (attackEnd - attackStart));
+    if (t < decayEnd) return level + (sustainLevel - level) * ((t - attackEnd) / (decayEnd - attackEnd));
+    return sustainLevel;
   }
 }

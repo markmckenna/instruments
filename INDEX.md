@@ -28,12 +28,18 @@ whenever a concept is added or removed (see `~/.claude/CLAUDE.md`
   voices, gain staging/limiter. [`hichord/js/audio.js`](hichord/js/audio.js),
   decisions in [`hichord/DECISIONS.md`](hichord/DECISIONS.md#audio-engine)
 - **Input model** — keyboard (`event.code`) + pointer wiring, polyphonic
-  chord buttons, glide-vs-retrigger on variant change, panic/safety valve on
-  blur or tab-hide. [`hichord/js/input.js`](hichord/js/input.js), decisions in
+  chord buttons, every note voiced independently by exact pitch on any
+  change, panic/safety valve on blur or tab-hide.
+  [`hichord/js/input.js`](hichord/js/input.js), decisions in
   [`hichord/DECISIONS.md`](hichord/DECISIONS.md#input-model)
 - **Loop recorder** — record-while-held, snap-to-beat playback via a Web
-  Audio lookahead scheduler. [`hichord/js/loop.js`](hichord/js/loop.js),
-  decisions in [`hichord/DECISIONS.md`](hichord/DECISIONS.md#loop-recorder)
+  Audio lookahead scheduler, quantized note timing.
+  [`hichord/js/loop.js`](hichord/js/loop.js), decisions in
+  [`hichord/DECISIONS.md`](hichord/DECISIONS.md#loop-recorder)
+- **Tempo, click track, quantize** — shared bpm/quantize-grid state, the
+  practice metronome click. [`hichord/js/tempo.js`](hichord/js/tempo.js),
+  [`hichord/js/metronome.js`](hichord/js/metronome.js), decisions in
+  [`hichord/DECISIONS.md`](hichord/DECISIONS.md#tempo-click-track-and-quantize)
 - **UI rendering** — reads app state, updates the static markup (no DOM
   construction in JS). [`hichord/js/ui.js`](hichord/js/ui.js)
 - **Automated integration tests** — Playwright driving the real page/audio

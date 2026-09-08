@@ -56,15 +56,26 @@ circle-of-fifths order.
 **Voice** — `↑` / `↓` (or the on-screen arrows) cycle through 4 sounds: Soft
 Pad (default), Pluck, Organ, Warm Pad.
 
+**Tempo** — the on-screen ↓/↑ arrows tune the bpm (default 120, range
+40–240); the ♩ button toggles a low metronome click, one per beat, that
+plays continuously at the current bpm regardless of recording/looping.
+
+**Quantize** — the on-screen ↓/↑ arrows halve/double the quantize grid a
+recorded note's timing snaps to (default 1/32 note). This only ever affects
+what gets *recorded* into a loop — live play always sounds exactly when you
+press, never snapped.
+
 **Loop** — hold `Tab` (or the on-screen record button) while you play;
 release it and the loop plays back on repeat, snapped to the nearest beat at
-120bpm. Hold `Tab` again to record a new loop (replaces the old one). "Clear
-loop" stops playback and drops it. You can keep playing chords live while
-the loop plays back — the two mix rather than one cutting the other off.
+the current bpm. Hold `Tab` again to record a new loop (replaces the old
+one). "Clear loop" stops playback and drops it. You can keep playing chords
+live while the loop plays back — the two mix rather than one cutting the
+other off.
 
 On a touchscreen (no physical keyboard), every control above has an on-screen
-equivalent — chord buttons, the 3x3 variant grid, key/voice arrows, and the
-record button all respond to touch/tap-and-hold the same way keys do.
+equivalent — chord buttons, the 3x3 variant grid, key/voice/tempo/quantize
+arrows, the click toggle, and the record button all respond to touch/tap-and-
+hold the same way keys do.
 
 ## Automated tests
 
@@ -112,6 +123,15 @@ Run through this after any change, in each target browser (see below):
 11. On mobile: rapid taps across chord/variant buttons shouldn't select
     text, trigger a callout menu, zoom the page, or leave a "stuck" (still
     lit, still sounding) button behind.
+12. Toggle the ♩ click on — you should hear an even, low click on every
+    beat, continuing whether or not you're recording/looping. Change the
+    BPM while it's clicking — the click should retime to match.
+13. Record a loop holding a chord for a couple of beats, release cleanly —
+    on repeated playouts the note should hold and release the same way
+    every time (no playout randomly cutting to silence early).
+14. Change the quantize control down a couple of notches (coarser, e.g.
+    1/8) and record a loop pressing slightly off the beat on purpose — the
+    loop should audibly snap closer to the beat than you actually played it.
 
 ## Browser support
 
@@ -127,6 +147,5 @@ audio before a user gesture), not a bug.
 ## Known limitations
 
 - Loop recorder captures one loop at a time; no overdub/multi-track layering
-  (you can play live over the loop, but that play isn't added into it), no
-  tempo control (fixed at 120bpm per the original spec).
-- No persistence — reloading the page resets key/voice/loop.
+  (you can play live over the loop, but that play isn't added into it).
+- No persistence — reloading the page resets key/voice/loop/tempo/quantize.

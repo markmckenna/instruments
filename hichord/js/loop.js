@@ -1,17 +1,17 @@
 // Loop recorder: hold Tab to record, release to snap the loop length to the
-// nearest beat at 120bpm and start looping it. Uses a standard Web-Audio
-// lookahead scheduler (short setInterval that schedules anything due in the
-// next LOOKAHEAD seconds) rather than relying on setTimeout/setInterval
-// timing directly, so playback stays tight even under UI jank.
+// nearest beat (at the shared Tempo's bpm, see tempo.js) and start looping
+// it. Uses a standard Web-Audio lookahead scheduler (short setInterval that
+// schedules anything due in the next LOOKAHEAD seconds) rather than relying
+// on setTimeout/setInterval timing directly, so playback stays tight even
+// under UI jank.
 
-const BPM = 120;
-const BEAT_SECONDS = 60 / BPM;
 const LOOKAHEAD = 0.1; // seconds
 const TICK_MS = 25;
 
 export class LoopRecorder {
-  constructor(engine) {
+  constructor(engine, tempo) {
     this.engine = engine;
+    this.tempo = tempo;
     this.state = 'idle'; // 'idle' | 'recording' | 'playing'
     this.events = []; // { t: secondsFromLoopStart, type: 'on' | 'off', notes }
     this.loopLength = 0;
@@ -33,7 +33,11 @@ export class LoopRecorder {
 
   recordEvent(type, notes) {
     if (this.state !== 'recording') return;
-    this.events.push({ t: this.engine.ctx.currentTime - this._recordStart, type, notes });
+    const raw = this.engine.ctx.currentTime - this._recordStart;
+    // Quantize to the shared Tempo's grid (default: nearest 32nd note) --
+    // "just on loops": this only ever touches what gets *recorded*, so live
+    // play is never snapped, only what a loop plays back.
+    this.events.push({ t: this.tempo.quantize(raw), type, notes });
   }
 
   stopRecording() {
@@ -56,8 +60,8 @@ export class LoopRecorder {
     // beat) -- generally well after its attack/decay has already settled
     // into a steady sustain by then, so it's inaudible, unlike the silence
     // rounding up used to add every cycle.
-    const beats = Math.max(1, Math.round(rawLength / BEAT_SECONDS));
-    this.loopLength = beats * BEAT_SECONDS;
+    const beats = Math.max(1, Math.round(rawLength / this.tempo.beatSeconds));
+    this.loopLength = beats * this.tempo.beatSeconds;
     // No event may land beyond the loop it's meant to play within, or it
     // (and the next iteration's events) would fire out of order. Clamp
     // first, then decide below (using the now-clamped last event) whether a
