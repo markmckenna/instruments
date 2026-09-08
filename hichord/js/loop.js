@@ -38,7 +38,11 @@ export class LoopRecorder {
   stopRecording() {
     if (this.state !== 'recording') return;
     const rawLength = this.engine.ctx.currentTime - this._recordStart;
-    const beats = Math.max(1, Math.round(rawLength / BEAT_SECONDS));
+    // Round UP to the next beat, never down: event timestamps are offsets
+    // from recording start up to rawLength, so rounding down could make an
+    // event's own timestamp exceed the loop length it's supposed to play
+    // within, throwing off every subsequent iteration's timing.
+    const beats = Math.max(1, Math.ceil(rawLength / BEAT_SECONDS));
     this.loopLength = beats * BEAT_SECONDS;
     if (this.events.length === 0) {
       this.state = 'idle';
