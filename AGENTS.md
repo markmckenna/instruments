@@ -61,6 +61,9 @@ affected.
 - Each instrument's own `Makefile` supports `make run` standalone (so
   `cd hichord && make run` and `make hichord` from the root do the same
   thing).
+- An instrument with an automated test suite supports `make test` standalone,
+  and the root `make test` runs every instrument's tests (skip instruments
+  with none).
 - `run` should be self-sufficient: serve the directory locally and open it
   in the default browser, blocking in the foreground so `Ctrl+C` cleanly
   stops the server.
@@ -79,10 +82,11 @@ affected.
   when refactoring shared functionality out of an instrument, confirm the
   instrument still passes its own README's manual smoke-test checklist
   before/after.
-- There is no automated test suite yet. Validation is a manual smoke test:
-  load the app, run through its README's checklist in a real or emulated
-  browser. If an instrument gets complex enough to warrant automated tests,
-  add them there and note the tooling choice in its `DECISIONS.md`.
+- Default validation is a manual smoke test: load the app, run through its
+  README's checklist in a real or emulated browser. Once an instrument gets
+  complex enough to warrant automated tests, add them in that instrument's
+  own directory and note the tooling choice in its `DECISIONS.md` (see
+  `PROCESS.md` "Validation approach" for the current per-instrument state).
 - Target browsers: current Chrome and Safari, both desktop and mobile. Keep
   this in mind for input handling (touch + pointer + keyboard), audio
   context unlocking (iOS Safari requires a user-gesture-triggered

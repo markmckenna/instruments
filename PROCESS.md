@@ -45,15 +45,18 @@ the split.
 
 ## Validation approach
 
-- No automated test framework yet (nothing here has enough logic branching
-  to clearly justify one over the cost of adding test tooling). Each
-  instrument's `README.md` carries a manual smoke-test checklist instead;
-  run it after meaningful changes, in real or emulated Chrome + Safari,
-  desktop + mobile.
-- Revisit per-instrument if/when an instrument's logic (e.g. audio
-  scheduling, chord theory) grows complex enough that manual testing stops
-  being reliable. `node --check` on each JS module is used as a cheap
-  syntax-error guard in the meantime.
+- No repo-wide test framework mandate -- each instrument's `README.md`
+  carries a manual smoke-test checklist by default; run it after meaningful
+  changes, in real or emulated Chrome + Safari, desktop + mobile.
+- Add automated tests per-instrument once its logic (audio scheduling, chord
+  theory, timing) grows complex enough that manual testing stops being
+  reliable, and note the tooling choice in that instrument's `DECISIONS.md`
+  (see `AGENTS.md`). First instance: `hichord` (Playwright integration tests
+  driving the real page in a real browser; `hichord/DECISIONS.md`
+  "Automated testing", `hichord/tests/README.md`). Reach for the same
+  tooling for the next instrument unless it has a concrete reason not to.
+- `node --check` on each JS module remains a cheap syntax-error guard
+  regardless of whether an instrument has a test suite yet.
 
 ## Git workflow
 

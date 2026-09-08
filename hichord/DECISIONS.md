@@ -190,6 +190,41 @@ they are below.
   coloring weren't available at the time of writing, so those buttons stay a
   neutral single color (as before) rather than guessing per-button colors.
 
+## Automated testing
+
+- **Playwright, Chromium only**: HiChord's logic (polyphony, glide-vs-retrigger
+  variant math, loop scheduling, the blur/visibility panic valve) has grown
+  past what a manual smoke test alone catches reliably (`../PROCESS.md`'s
+  validation approach flagged this as the trigger for adding tooling). No
+  audio framework or DOM framework needed changing to add tests: Playwright
+  drives the real static page in a real browser over `python3 -m http.server`
+  (same server the app already uses), so the tests exercise the actual
+  `input.js`/`audio.js`/`loop.js`/`theory.js` code paths rather than a mocked
+  stand-in. Chromium only for now (not also WebKit/Safari) to keep CI-less
+  local runs fast; cross-browser behavior stays on the manual checklist.
+- **Real audio, asserted via a probe, not a mock**: tests don't stub Web
+  Audio -- `tests/support/fixtures.js` wraps `OscillatorNode.start/stop` and
+  `AudioParam.setTargetAtTime` in the page so real oscillator frequencies and
+  glide targets get logged, then compared against frequencies computed from
+  the app's own `theory.js`/`audio.js` math (`tests/support/expected-audio.js`),
+  not a hand-copied table. This is what makes the glide-vs-retrigger
+  distinction (see "Variant keys glide, not retrigger" above) actually
+  testable: a glide shows up as `setTargetAtTime` calls with no new
+  oscillators, a retrigger as stop+start pairs.
+- **Real input, not synthetic events**: on-screen buttons are held with a
+  real Playwright mouse pointer and physical keys with real keyboard events,
+  not fabricated `PointerEvent`s -- `input.js`'s `bindPress()` calls
+  `el.setPointerCapture(e.pointerId)` unguarded, which throws for a
+  pointerId that was never actually pressed down. Two-button polyphony is
+  tested by combining one mouse hold with one keyboard hold rather than
+  inventing a second pointer.
+- **Test tooling is local to `hichord/`**: `package.json`/`node_modules` live
+  in this directory, not the repo root, matching the "every experiment
+  directory is self-contained" rule in `../AGENTS.md` -- the app itself still
+  has zero dependencies and no build step; only the test runner is a
+  dependency, and only for developers who run `make test`.
+- See `tests/README.md` for what's covered and how to run them.
+
 ## Not built (deliberately out of scope for this pass)
 
 - No octave-shift control (real HiChord has one on its joystick; the

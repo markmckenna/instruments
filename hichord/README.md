@@ -66,6 +66,15 @@ On a touchscreen (no physical keyboard), every control above has an on-screen
 equivalent — chord buttons, the 3x3 variant grid, key/voice arrows, and the
 record button all respond to touch/tap-and-hold the same way keys do.
 
+## Automated tests
+
+`make test` runs the Playwright integration test suite (real browser, real
+Web Audio) covering chords, variants, key/voice switching, and the loop
+recorder. See [`tests/README.md`](tests/README.md) for what's covered and
+[`DECISIONS.md`](./DECISIONS.md#automated-testing) for why. These don't
+replace the manual smoke test below -- they don't cover cross-browser
+behavior or touch-specific quirks.
+
 ## Manual smoke test
 
 Run through this after any change, in each target browser (see below):
