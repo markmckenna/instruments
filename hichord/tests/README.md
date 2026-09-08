@@ -1,0 +1,56 @@
+# HiChord integration tests
+
+Automated tests that drive the real app in a real browser (Playwright +
+Chromium) -- real DOM, real keyboard/pointer events, real Web Audio. See
+`../DECISIONS.md` ("Automated testing") for why Playwright and why now.
+
+## Run them
+
+```sh
+cd hichord
+make test
+```
+
+Or standalone: `npm ci && npx playwright install chromium && npx playwright test`.
+
+## How they work
+
+- `support/fixtures.js` provides the `test`/`expect` every spec imports. It
+  installs a small Web Audio probe (`page.addInitScript`) before the app's
+  own scripts run, wrapping `OscillatorNode.start/stop` and
+  `AudioParam.setTargetAtTime` so tests can assert on what the audio engine
+  actually did (`markAudio` / `audioEventsSince`) instead of only on DOM
+  state. It also fails any test whose page logged a console error or an
+  uncaught exception.
+- `support/expected-audio.js` computes the frequencies a chord *should*
+  produce by importing `js/theory.js` and `js/audio.js` directly (both are
+  dependency-free and DOM-free, so they run fine under Node) rather than
+  hand-copying a table of expected notes. If the chord/variant math in
+  `theory.js` changes, the expectations move with it.
+- `support/interactions.js` holds on-screen buttons with a real mouse and
+  physical keys with real keyboard events, rather than fabricating
+  `PointerEvent`s -- `input.js` calls `setPointerCapture` unguarded, which
+  throws for a pointerId that was never actually pressed down. Simultaneous
+  holds (polyphony) are done by combining one mouse hold with one keyboard
+  hold, which is also a closer stand-in for two simultaneous touches than a
+  single input device could give.
+
+## What's covered
+
+- `chords.spec.js` -- each chord button's triad, release, and polyphony
+  (multiple buttons held at once).
+- `variants.spec.js` -- the QWE/ASD/ZXC grid: glide-in-place when the note
+  count doesn't change, fallback retrigger when it does, and
+  quality-dependent variants (M7, Mm flip) over major/minor/diminished bases.
+- `key-voice.spec.js` -- key switching relabels every chord button and
+  re-pitches a held chord; voice switching changes the actual oscillator
+  layout used.
+- `loop.spec.js` -- record/release starts real looping playback on the real
+  clock, live play mixes with it, Clear loop actually stops the scheduler.
+- `keyboard-and-safety.spec.js` -- OS key-repeat is ignored, and the
+  blur/visibilitychange "panic" safety valve releases a held chord.
+
+Not covered here (left to the manual smoke test in `../README.md`): actually
+*hearing* the result, touch-specific browser quirks (text selection/callout
+suppression, iOS Safari's gesture-gated `AudioContext`), and cross-browser
+behavior -- these tests run Chromium only.

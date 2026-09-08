@@ -1,0 +1,12 @@
+{
+  "name": "hichord-tests",
+  "private": true,
+  "type": "module",
+  "description": "Test tooling for the HiChord experiment. The app itself has no build step or dependencies -- see AGENTS.md; this package.json exists only to pin the Playwright test runner.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

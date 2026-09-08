@@ -1,0 +1,66 @@
+// Loop recorder: hold Tab to record, release to start looping playback,
+// Clear loop drops it. Real timing (no fake clock) since the scheduler
+// (loop.js) drives itself off the real AudioContext clock via setInterval --
+// see DECISIONS.md "Loop recorder" for why.
+import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
+import { holdKey, releaseKey } from './support/interactions.js';
+
+test('recording a note then releasing Tab loops it, and Clear loop stops it', async ({ page }) => {
+  const recordBtn = page.locator('[data-action="record"]');
+  const loopDisplay = page.locator('[data-display="loop"]');
+
+  await holdKey(page, 'Tab');
+  await expect(recordBtn).toHaveClass(/recording/);
+  await expect(loopDisplay).toHaveText('Recording…');
+
+  // Release Tab *while J is still held* -- the recorded chord's 'on' event
+  // has no matching 'off' within the recording. Per DECISIONS.md ("Recording
+  // stopped mid-hold gets a synthetic release at the loop boundary"),
+  // stopRecording() appends a synthetic 'off' right at the loop length
+  // instead of leaving it dangling, so the note sounds for (almost) the
+  // entire loop -- which also makes "is the loop voice currently sounding"
+  // deterministic enough for the Clear-loop assertion below.
+  await holdKey(page, 'j');
+  await page.waitForTimeout(150);
+  await releaseKey(page, 'Tab');
+  await releaseKey(page, 'j');
+
+  await expect(recordBtn).toHaveClass(/playing/);
+  await expect(loopDisplay).toHaveText('Looping');
+
+  // Loop length is rounded up to a whole beat at 120bpm (minimum 0.5s, see
+  // loop.js); 2s comfortably covers at least one full replay of a short loop.
+  const mark = await markAudio(page);
+  await page.waitForTimeout(2000);
+  const replayed = (await audioEventsSince(page, mark)).filter((e) => e.type === 'start');
+  expect(replayed.length).toBeGreaterThan(0);
+
+  const clearMark = await markAudio(page);
+  await page.click('[data-action="clear-loop"]');
+  await expect(loopDisplay).toHaveText('No loop');
+  await expect(recordBtn).not.toHaveClass(/playing/);
+  const clearEvents = await audioEventsSince(page, clearMark);
+  expect(clearEvents.some((e) => e.type === 'stop')).toBe(true); // whatever the loop last triggered gets released, not left ringing
+
+  const afterClearMark = await markAudio(page);
+  await page.waitForTimeout(1200);
+  const afterClear = (await audioEventsSince(page, afterClearMark)).filter((e) => e.type === 'start');
+  expect(afterClear).toHaveLength(0); // scheduler is actually stopped, not just hidden by the UI
+});
+
+test('a chord held live keeps sounding on top of loop playback', async ({ page }) => {
+  await holdKey(page, 'Tab');
+  await holdKey(page, 'j');
+  await page.waitForTimeout(150);
+  await releaseKey(page, 'j');
+  await page.waitForTimeout(100);
+  await releaseKey(page, 'Tab');
+
+  const mark = await markAudio(page);
+  await holdKey(page, 'o'); // degree 3, IV -- live, independent of whatever the loop is doing
+  const startedLive = (await audioEventsSince(page, mark)).filter((e) => e.type === 'start');
+  expect(startedLive.length).toBeGreaterThan(0);
+
+  await releaseKey(page, 'o');
+  await page.click('[data-action="clear-loop"]');
+});
