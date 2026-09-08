@@ -14,7 +14,8 @@ whenever a concept is added or removed (see `~/.claude/CLAUDE.md`
   Make command backbone, port registry, validation approach, git workflow.
   [`PROCESS.md`](PROCESS.md)
 - **Root command backbone** — `make <instrument>` runs an instrument,
-  `make test` runs every instrument's automated tests. [`Makefile`](Makefile)
+  `make check` runs every instrument's automated validations;
+  `./validate.sh` wraps that in a strict pass/fail contract. [`Makefile`](Makefile), [`validate.sh`](validate.sh)
 
 ## HiChord (`hichord/`)
 

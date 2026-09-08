@@ -8,7 +8,7 @@ Chromium) -- real DOM, real keyboard/pointer events, real Web Audio. See
 
 ```sh
 cd hichord
-make test
+make check
 ```
 
 Or standalone: `npm ci && npx playwright install chromium && npx playwright test`.

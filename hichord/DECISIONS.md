@@ -222,7 +222,7 @@ they are below.
   in this directory, not the repo root, matching the "every experiment
   directory is self-contained" rule in `../AGENTS.md` -- the app itself still
   has zero dependencies and no build step; only the test runner is a
-  dependency, and only for developers who run `make test`.
+  dependency, and only for developers who run `make check`.
 - See `tests/README.md` for what's covered and how to run them.
 
 ## Not built (deliberately out of scope for this pass)

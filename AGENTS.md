@@ -65,9 +65,13 @@ affected.
 - Each instrument's own `Makefile` supports `make run` standalone (so
   `cd hichord && make run` and `make hichord` from the root do the same
   thing).
-- An instrument with an automated test suite supports `make test` standalone,
-  and the root `make test` runs every instrument's tests (skip instruments
-  with none).
+- An instrument with automated validations supports `make check` standalone
+  (not `test` -- `check` is the standard name for "run all automated
+  validations"), and the root `make check` runs every instrument's (skip
+  instruments with none). `./validate.sh` at the repo root wraps `make check`
+  in a strict contract (exit 0 and print exactly `PASSED` on success,
+  details + next steps on failure) for anything that needs an unambiguous
+  pass/fail signal.
 - `run` should be self-sufficient: serve the directory locally and open it
   in the default browser, blocking in the foreground so `Ctrl+C` cleanly
   stops the server.
