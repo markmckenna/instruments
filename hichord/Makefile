@@ -3,11 +3,12 @@
 # Usage:
 #   make run     Serve HiChord locally and open it in the default browser
 #   make stop    Kill a server left running from a backgrounded `make run`
+#   make test    Run the automated integration tests (see tests/README.md)
 
 PORT ?= 4173
 URL := http://localhost:$(PORT)
 
-.PHONY: run open stop
+.PHONY: run open stop test
 
 run:
 	@echo "HiChord: $(URL)  (Ctrl+C to stop)"
@@ -21,3 +22,11 @@ open:
 
 stop:
 	@lsof -ti tcp:$(PORT) | xargs kill 2>/dev/null || true
+
+node_modules: package.json
+	@npm install
+	@npx playwright install chromium
+	@touch node_modules
+
+test: node_modules
+	@npx playwright test
