@@ -6,7 +6,7 @@ import { CHORD_KEYS, DEGREES, chordRootName } from './theory.js';
 
 const QUALITY_SUFFIX = { maj: '', min: 'm', dim: '°' };
 
-export function renderUI({ key, voice, heldBase, heldVariant, loopState }) {
+export function renderUI({ key, voice, heldBases, heldVariant, loopState }) {
   document.querySelectorAll('[data-base]').forEach((el) => {
     const code = el.dataset.base;
     const degreeIndex = CHORD_KEYS.findIndex((k) => k.code === code);
@@ -14,7 +14,7 @@ export function renderUI({ key, voice, heldBase, heldVariant, loopState }) {
     const name = chordRootName(key.pc, degreeIndex) + QUALITY_SUFFIX[degree.quality];
     const nameEl = el.querySelector('.chord-name');
     if (nameEl) nameEl.textContent = name;
-    el.classList.toggle('active', code === heldBase);
+    el.classList.toggle('active', heldBases.includes(code));
   });
 
   document.querySelectorAll('[data-variant]').forEach((el) => {

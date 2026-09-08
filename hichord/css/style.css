@@ -1,3 +1,10 @@
+/* Color scheme loosely mimics the real HiChord hardware: a dark body (its
+   currently-shipping "Cosmic Blue" edition, hence the blue accent below used
+   for the general highlight/active state) with three distinctly-colored top
+   controls -- the device's manual documents these as a gray "Key &
+   Settings" button, a yellow "Sounds & Effects" button, and a red "Modes &
+   Tempo" button, which map onto our Key control, Voice control, and
+   loop/record control (a mode) respectively. See DECISIONS.md. */
 :root {
   color-scheme: dark;
   --bg: #14161c;
@@ -5,11 +12,14 @@
   --panel-border: #2c3140;
   --text: #e9ebf2;
   --text-dim: #9aa0b4;
-  --accent: #7ee8c1;
-  --accent-dim: #3a5a4e;
+  --accent: #4f8cff;
+  --accent-dim: #2c3f66;
+  --accent-key: #b7bccb;
+  --accent-voice: #f2c94c;
+  --accent-mode: #ff6b6b;
   --key-face: #262a35;
-  --key-face-active: #7ee8c1;
-  --key-text-active: #10131a;
+  --key-face-active: #4f8cff;
+  --key-text-active: #ffffff;
   --danger: #ff6b6b;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -66,6 +76,7 @@ button {
 }
 
 .control-group {
+  --group-accent: var(--accent);
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -73,7 +84,11 @@ button {
   border: 1px solid var(--panel-border);
   border-radius: 999px;
   padding: 0.3rem;
+  border-left: 3px solid var(--group-accent);
 }
+/* Key = gray, Voice = yellow, matching the real device's top button colors. */
+.control-group[aria-label="Key"] { --group-accent: var(--accent-key); }
+.control-group[aria-label="Voice"] { --group-accent: var(--accent-voice); }
 
 .pill-btn {
   width: 2rem;
@@ -86,7 +101,7 @@ button {
   font-size: 1rem;
   flex-shrink: 0;
 }
-.pill-btn:active { background: var(--accent-dim); }
+.pill-btn:active { background: var(--group-accent, var(--accent)); color: var(--key-text-active); }
 
 .display {
   display: flex;
@@ -105,6 +120,7 @@ button {
   font-size: 0.95rem;
   font-weight: 600;
 }
+.control-group .display-value { color: var(--group-accent, var(--text)); }
 
 /* --- Stage --- */
 
@@ -144,15 +160,27 @@ button {
   font-size: 0.7rem;
 }
 
-/* --- Chord keyboard: staggered to mirror physical key rows --- */
+/* --- Chord keyboard: a clean grid, staggered by column to mirror physical
+   key rows -- I/O/P (top) sit centered over the J/K/L/; (bottom) boundaries,
+   same as the real keys they're named after. */
 
 .chord-keyboard {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   grid-template-rows: repeat(2, minmax(3.4rem, 1fr));
+  grid-template-areas:
+    ".    .    i    i    o    o    p    p"
+    "j    j    k    k    l    l    semi semi";
   gap: 0.4rem;
   flex: 1;
 }
+.chord-btn[data-base="KeyJ"] { grid-area: j; }
+.chord-btn[data-base="KeyI"] { grid-area: i; }
+.chord-btn[data-base="KeyK"] { grid-area: k; }
+.chord-btn[data-base="KeyO"] { grid-area: o; }
+.chord-btn[data-base="KeyL"] { grid-area: l; }
+.chord-btn[data-base="KeyP"] { grid-area: p; }
+.chord-btn[data-base="Semicolon"] { grid-area: semi; }
 
 .chord-btn {
   background: var(--key-face);
@@ -231,6 +259,7 @@ button {
   gap: 0.6rem;
   background: var(--panel);
   border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--accent-mode);
   border-radius: 1rem;
   padding: 0.6rem 0.75rem;
 }

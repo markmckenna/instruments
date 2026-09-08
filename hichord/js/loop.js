@@ -48,6 +48,16 @@ export class LoopRecorder {
       this.state = 'idle';
       return;
     }
+    // If recording stopped while a chord was still held, its 'on' event has
+    // no matching 'off' -- without this, every loop iteration would fire
+    // that same 'on' again on top of the still-sounding note (playChord()
+    // re-triggers rather than releasing), never actually releasing it, which
+    // sounds like one continuous note rather than a loop. Force a release
+    // right at the loop boundary so playback always cleanly cuts the note
+    // before repeating.
+    if (this.events[this.events.length - 1].type === 'on') {
+      this.events.push({ t: this.loopLength, type: 'off', notes: null });
+    }
     this.state = 'playing';
     this._startScheduler();
   }
@@ -55,11 +65,13 @@ export class LoopRecorder {
   /** Stop looping playback (keeps the recorded events, use clear() to drop them). */
   stopPlaying() {
     this._stopScheduler();
+    this.engine.stopChord('loop'); // release whatever the loop last triggered, don't let it ring forever
     if (this.state === 'playing') this.state = 'idle';
   }
 
   clear() {
     this._stopScheduler();
+    this.engine.stopChord('loop'); // same as stopPlaying(): don't leave the last-triggered note stuck sounding
     this.state = 'idle';
     this.events = [];
     this.loopLength = 0;
@@ -112,8 +124,8 @@ export class LoopRecorder {
     const delayMs = Math.max(0, (when - ctx.currentTime) * 1000);
     setTimeout(() => {
       if (this.state !== 'playing') return; // loop was cleared/stopped after this was scheduled
-      if (ev.type === 'on') this.engine.playChord(ev.notes);
-      else this.engine.stopChord();
+      if (ev.type === 'on') this.engine.playChord('loop', ev.notes);
+      else this.engine.stopChord('loop');
     }, delayMs);
   }
 }

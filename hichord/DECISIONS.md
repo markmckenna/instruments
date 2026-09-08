@@ -59,13 +59,13 @@ they are below.
 
 ## Input model
 
-- **Monophonic chord slot**: only one chord sounds at a time, even if you
-  manage to hold two chord buttons at once (last-pressed wins, but releasing
-  it falls back to any other chord button still physically held — tracked as
-  a stack, not a single value, specifically to handle that fallback cleanly).
-  This matches a one-handed chord-instrument mental model and keeps the audio
-  engine simple. Revisit if a future iteration wants to layer/hold multiple
-  chords (e.g. a two-handed mode).
+- **Polyphonic chord buttons**: holding several chord buttons at once sounds
+  all of them together (`currentSound()` in `input.js` merges every held
+  button's notes, deduped, into one chord) rather than the earlier
+  last-pressed-wins behavior. The variant/joystick control stays a stack —
+  there's still only one variant control, matching the real device's single
+  joystick, so it shapes whatever's held uniformly rather than needing its
+  own per-chord state.
 - **Variant keys glide, not retrigger**: changing the held variant while a
   chord button is held re-pitches the currently-sounding notes in place
   (`AudioEngine.updateChord`) rather than cutting and restarting them, as
@@ -97,6 +97,25 @@ they are below.
   chord's notes are captured as the loop's `t=0` state — otherwise a chord
   you were holding before you started recording would silently drop out of
   the loop.
+- **Live play and loop playback are independent `AudioEngine` voices**
+  (`'live'` and `'loop'`, see Audio engine below), so holding a chord while
+  the loop is playing mixes the two instead of one stealing the other's
+  sound — this is what makes it possible to play over top of a running loop.
+- **Recording stopped mid-hold gets a synthetic release at the loop
+  boundary**: if you release Tab while still holding a chord, that chord's
+  `'on'` event has no matching `'off'` within the recording. Without a fix,
+  every loop iteration would fire that same `'on'` again on top of the
+  still-sounding note (`playChord()` re-triggers rather than releasing),
+  which never actually stops — audible as one continuous note rather than a
+  loop. `stopRecording()` now appends a synthetic `'off'` event at exactly
+  the loop length when the last recorded event is an unmatched `'on'`, so
+  playback always cleanly releases the note before repeating.
+- **`clear()` and `stopPlaying()` explicitly stop the `'loop'` voice.**
+  Previously they only stopped the scheduler (no more events would be
+  *scheduled*), but whatever the loop had most recently triggered kept
+  ringing — for a long-release voice this could sound like "Clear loop
+  doesn't work." Both now call `engine.stopChord('loop')` so pressing Clear
+  (or otherwise stopping playback) is heard immediately.
 - Every "the sounding chord changed" moment (new chord button press, or a
   variant change while held) is recorded as a fresh note-on event, even when
   it was actually a live glide rather than a retrigger. On loop playback this
@@ -132,10 +151,51 @@ they are below.
   buildup/distortion over a running loop. Centralizing the release inside
   `playChord()` makes that class of bug structurally impossible rather than
   something every call site has to remember.
+- **Multiple independent voices, identified by a caller-chosen id**:
+  `playChord`/`updateChord`/`stopChord` all now take a `voiceId` and track
+  each one's sounding notes separately (`AudioEngine.active`, a `Map`).
+  `input.js` uses `'live'` for whatever's currently held; `loop.js` uses
+  `'loop'` for playback. Previously there was a single shared `activeNotes`
+  array, so live playing and loop playback (or, before chord buttons became
+  polyphonic, any two callers) stole each other's notes rather than mixing —
+  this is what makes overlaying chords and playing over a running loop work.
+- **Gain staging fixed to stop clipping**: every note used to play at full
+  oscillator gain regardless of how many notes were in the chord, so a wide
+  voicing (the 5-note `9` variant, say) summed to several times the
+  amplitude of a plain triad and clipped. `_playNote` now scales each note's
+  gain by `1/sqrt(chordSize)`, master gain dropped from 0.8 to 0.5, and a
+  `DynamicsCompressorNode` (fast attack, high ratio) sits between the master
+  bus and the destination as a headroom safety net for whatever the
+  per-chord normalization doesn't fully catch — now more necessary than
+  before since independent voices (multiple held chords, live-over-loop) can
+  sum together.
+
+## Visual design
+
+- **Layout**: the chord grid puts J/K/L/; on the bottom row and I/O/P on the
+  top row (via CSS `grid-template-areas` in `chord-keyboard`, rather than
+  per-button inline styles), each top button centered over the boundary of
+  two bottom ones — mirroring where those keys actually sit on a physical
+  keyboard. The two on-screen panels are ordered Variants (QWE/ASD/ZXC) then
+  Chords (JIKOLP;) so that, in the side-by-side desktop layout, the
+  left-hand-side keys are the left panel and the right-hand-side keys are
+  the right panel, matching where your hands actually go.
+- **Color scheme**: the HiChord manual (hichord.shop/pages/manual) documents
+  its three top buttons as gray ("Key & Settings"), yellow ("Sounds &
+  Effects"), and red ("Modes & Tempo") — those map onto our Key control,
+  Voice control, and loop/record control (a mode) respectively, each now
+  tinted accordingly. The general highlight/active color moved from the
+  previous arbitrary teal to a blue, after "Cosmic Blue" (the currently-
+  shipping hardware edition). Exact photos of the device's chord-button
+  coloring weren't available at the time of writing, so those buttons stay a
+  neutral single color (as before) rather than guessing per-button colors.
 
 ## Not built (deliberately out of scope for this pass)
 
 - No octave-shift control (real HiChord has one on its joystick; the
   README's spec for this experiment doesn't mention one).
-- No multi-track looper layering, no tempo control, no MIDI I/O.
+- No multi-track looper layering (recording overdubs into a loop, or
+  stacking more than one loop) or tempo control or MIDI I/O — live play can
+  now be overlaid live and can play over a running loop (see Loop recorder
+  above), but the loop itself still holds only one recorded take.
 - No shared code with other instruments yet — see `../PROCESS.md`.

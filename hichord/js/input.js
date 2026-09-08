@@ -13,76 +13,89 @@ const state = {
   keyIndex: 0, // index into CIRCLE_OF_FIFTHS
 };
 
-// Stacks (not single values) so that if you're holding two chord buttons (or
-// two variant keys) at once, releasing the most recent one falls back to
-// whichever is still physically held, instead of going silent.
-let heldBaseStack = [];
+// Chord buttons are polyphonic: any number can be held at once and all sound
+// together (see currentSound() below), so this is a plain membership list,
+// not a stack. The variant/joystick control is still a stack (only one
+// variant shapes the sound at a time, matching the real device's single
+// joystick), so that if you're holding two variant keys at once, releasing
+// the most recent one falls back to whichever is still physically held,
+// instead of going silent.
+let heldBases = [];
 let heldVariantStack = [];
 
 const BASE_CODES = new Set(CHORD_KEYS.map((k) => k.code));
 const VARIANT_CODES = new Set(Object.keys(VARIANTS));
 
-function currentChord() {
-  if (heldBaseStack.length === 0) return null;
-  const baseCode = heldBaseStack[heldBaseStack.length - 1];
-  const degreeIndex = CHORD_KEYS.findIndex((k) => k.code === baseCode);
+// Combines every currently-held chord button into one sound: all of them are
+// built with whatever variant is currently held (there's only one variant
+// control, so it shapes all held chords uniformly) and their notes merged
+// into a single deduped list. Holding just one button behaves exactly as
+// before; holding several overlays them into one richer chord.
+function currentSound() {
+  if (heldBases.length === 0) return null;
   const variantCode = heldVariantStack.length ? heldVariantStack[heldVariantStack.length - 1] : 'KeyS';
-  const notes = buildChord(CIRCLE_OF_FIFTHS[state.keyIndex].pc, degreeIndex, variantCode);
-  return { notes, degreeIndex, variantCode };
+  const degreeIndices = heldBases.map((code) => CHORD_KEYS.findIndex((k) => k.code === code));
+  const noteSet = new Set();
+  degreeIndices.forEach((degreeIndex) => {
+    buildChord(CIRCLE_OF_FIFTHS[state.keyIndex].pc, degreeIndex, variantCode).forEach((n) => noteSet.add(n));
+  });
+  return { notes: Array.from(noteSet).sort((a, b) => a - b), degreeIndices, variantCode };
 }
 
+// Live playing and loop playback are independent engine voices ('live' and
+// 'loop' respectively, see loop.js) so one doesn't cut the other off --
+// holding a chord while a loop is playing mixes both instead of stealing the
+// loop's sound.
 function refreshSound() {
-  const chord = currentChord();
-  if (chord) {
-    engine.updateChord(chord.notes);
-    recorder.recordEvent('on', chord.notes);
+  const sound = currentSound();
+  if (sound) {
+    engine.updateChord('live', sound.notes);
+    recorder.recordEvent('on', sound.notes);
   } else {
-    engine.stopChord();
+    engine.stopChord('live');
     recorder.recordEvent('off', null);
   }
   updateUI();
 }
 
 export function updateUI() {
-  const chord = currentChord();
   renderUI({
     key: CIRCLE_OF_FIFTHS[state.keyIndex],
     voice: engine.voice,
-    heldBase: heldBaseStack[heldBaseStack.length - 1] || null,
+    heldBases,
     heldVariant: heldVariantStack[heldVariantStack.length - 1] || null,
-    activeDegreeIndex: chord ? chord.degreeIndex : null,
     loopState: recorder.state,
   });
 }
 
 function pressBase(code) {
-  if (heldBaseStack.includes(code)) return; // ignore key-repeat / duplicate pointer
-  heldBaseStack.push(code);
+  if (heldBases.includes(code)) return; // ignore key-repeat / duplicate pointer
+  heldBases.push(code);
   refreshSound();
 }
 function releaseBase(code) {
-  const idx = heldBaseStack.indexOf(code);
+  const idx = heldBases.indexOf(code);
   if (idx === -1) return;
-  heldBaseStack.splice(idx, 1);
+  heldBases.splice(idx, 1);
   refreshSound();
 }
 function pressVariant(code) {
   if (heldVariantStack.includes(code)) return;
   heldVariantStack.push(code);
-  if (heldBaseStack.length) refreshSound();
+  if (heldBases.length) refreshSound();
   else updateUI();
 }
 function releaseVariant(code) {
   const idx = heldVariantStack.indexOf(code);
   if (idx === -1) return;
   heldVariantStack.splice(idx, 1);
-  if (heldBaseStack.length) refreshSound();
+  if (heldBases.length) refreshSound();
   else updateUI();
 }
 
 function changeKey(delta) {
   state.keyIndex = (state.keyIndex + delta + CIRCLE_OF_FIFTHS.length) % CIRCLE_OF_FIFTHS.length;
-  if (heldBaseStack.length) refreshSound();
+  if (heldBases.length) refreshSound();
   else updateUI();
 }
 function changeVoice(delta) {
@@ -94,8 +107,8 @@ function toggleRecord(down) {
   if (down) {
     if (recorder.state !== 'recording') {
       recorder.startRecording();
-      const chord = currentChord(); // capture whatever's already sounding as t=0
-      if (chord) recorder.recordEvent('on', chord.notes);
+      const sound = currentSound(); // capture whatever's already sounding as t=0
+      if (sound) recorder.recordEvent('on', sound.notes);
     }
   } else if (recorder.state === 'recording') {
     recorder.stopRecording();
@@ -131,9 +144,9 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) panic();
 });
 function panic() {
-  heldBaseStack = [];
+  heldBases = [];
   heldVariantStack = [];
-  engine.stopChord();
+  engine.stopChord('live');
   if (recorder.state === 'recording') recorder.stopRecording();
   updateUI();
 }

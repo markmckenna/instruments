@@ -34,7 +34,9 @@ restrict some APIs on `file://` — use `make run` for the real thing.
 ## Controls
 
 **Chords** — hold a key to sound its chord (root position triad in the
-current key), release to stop:
+current key), release to stop. Multiple chord buttons can be held at once —
+they overlay into one combined chord rather than the most recent one
+stealing the sound:
 
 | Key | `J` | `I` | `K` | `O` | `L` | `P` | `;` |
 |---|---|---|---|---|---|---|---|
@@ -57,7 +59,8 @@ Pad (default), Pluck, Organ, Warm Pad.
 **Loop** — hold `Tab` (or the on-screen record button) while you play;
 release it and the loop plays back on repeat, snapped to the nearest beat at
 120bpm. Hold `Tab` again to record a new loop (replaces the old one). "Clear
-loop" stops playback and drops it.
+loop" stops playback and drops it. You can keep playing chords live while
+the loop plays back — the two mix rather than one cutting the other off.
 
 On a touchscreen (no physical keyboard), every control above has an on-screen
 equivalent — chord buttons, the 3x3 variant grid, key/voice arrows, and the
@@ -82,10 +85,15 @@ Run through this after any change, in each target browser (see below):
    noticeably different (e.g. Organ vs. Pluck).
 7. Hold `Tab`, play a couple of chords, release — loop should start playing
    back on its own, in time, repeating cleanly with no glitch at the seam.
-8. Tap "Clear loop" — playback should stop.
-9. Switch away from the tab/app mid-hold (e.g. Cmd+Tab) and back — no note
+   While it's playing, hold a chord button — you should hear your chord
+   mixed on top of the loop, not the loop cutting out.
+8. Tap "Clear loop" — playback (and whatever it was last sounding) should
+   stop immediately.
+9. Hold two chord buttons at once — you should hear both chords together,
+   not just the most recently pressed one.
+10. Switch away from the tab/app mid-hold (e.g. Cmd+Tab) and back — no note
    should be left stuck on, and no recording left stuck in progress.
-10. On mobile: rapid taps across chord/variant buttons shouldn't select
+11. On mobile: rapid taps across chord/variant buttons shouldn't select
     text, trigger a callout menu, zoom the page, or leave a "stuck" (still
     lit, still sounding) button behind.
 
@@ -102,7 +110,7 @@ audio before a user gesture), not a bug.
 
 ## Known limitations
 
-- One chord at a time (monophonic chord slot) — see `DECISIONS.md`.
-- Loop recorder captures one loop at a time; no overdub/multi-track layering,
-  no tempo control (fixed at 120bpm per the original spec).
+- Loop recorder captures one loop at a time; no overdub/multi-track layering
+  (you can play live over the loop, but that play isn't added into it), no
+  tempo control (fixed at 120bpm per the original spec).
 - No persistence — reloading the page resets key/voice/loop.

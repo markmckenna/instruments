@@ -31,34 +31,6 @@
     </header>
 
     <main class="stage">
-      <section class="panel" aria-label="Chord buttons">
-        <h2 class="panel-title">Chords <span class="hint">hold JIKOLP;</span></h2>
-        <div class="chord-keyboard">
-          <!-- Staggered to mirror real keyboard geometry: I/O/P sit above K/L/; -->
-          <button type="button" class="chord-btn" style="grid-column: 1 / 3; grid-row: 1;" data-base="KeyJ">
-            <span class="key-letter">J</span><span class="degree">I</span><span class="chord-name">C</span>
-          </button>
-          <button type="button" class="chord-btn" style="grid-column: 3 / 5; grid-row: 2;" data-base="KeyI">
-            <span class="key-letter">I</span><span class="degree">ii</span><span class="chord-name">Dm</span>
-          </button>
-          <button type="button" class="chord-btn" style="grid-column: 3 / 5; grid-row: 1;" data-base="KeyK">
-            <span class="key-letter">K</span><span class="degree">iii</span><span class="chord-name">Em</span>
-          </button>
-          <button type="button" class="chord-btn" style="grid-column: 5 / 7; grid-row: 2;" data-base="KeyO">
-            <span class="key-letter">O</span><span class="degree">IV</span><span class="chord-name">F</span>
-          </button>
-          <button type="button" class="chord-btn" style="grid-column: 5 / 7; grid-row: 1;" data-base="KeyL">
-            <span class="key-letter">L</span><span class="degree">V</span><span class="chord-name">G</span>
-          </button>
-          <button type="button" class="chord-btn" style="grid-column: 7 / 9; grid-row: 2;" data-base="KeyP">
-            <span class="key-letter">P</span><span class="degree">vi</span><span class="chord-name">Am</span>
-          </button>
-          <button type="button" class="chord-btn" style="grid-column: 7 / 9; grid-row: 1;" data-base="Semicolon">
-            <span class="key-letter">;</span><span class="degree">vii°</span><span class="chord-name">B°</span>
-          </button>
-        </div>
-      </section>
-
       <section class="panel" aria-label="Chord variants">
         <h2 class="panel-title">Variants <span class="hint">hold QWE / ASD / ZXC</span></h2>
         <div class="variant-grid">
@@ -71,6 +43,36 @@
           <button type="button" class="variant-btn" data-variant="KeyZ"><span class="key-letter">Z</span><span class="variant-name">6sus2</span></button>
           <button type="button" class="variant-btn" data-variant="KeyX"><span class="key-letter">X</span><span class="variant-name">sus4</span></button>
           <button type="button" class="variant-btn" data-variant="KeyC"><span class="key-letter">C</span><span class="variant-name">9</span></button>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Chord buttons">
+        <h2 class="panel-title">Chords <span class="hint">hold JIKOLP;</span></h2>
+        <div class="chord-keyboard">
+          <!-- Grid areas place I/O/P on the top row and J/K/L/; on the
+               bottom row (each top button centered above the boundary of two
+               bottom ones), mirroring physical keyboard geometry. -->
+          <button type="button" class="chord-btn" data-base="KeyJ">
+            <span class="key-letter">J</span><span class="degree">I</span><span class="chord-name">C</span>
+          </button>
+          <button type="button" class="chord-btn" data-base="KeyI">
+            <span class="key-letter">I</span><span class="degree">ii</span><span class="chord-name">Dm</span>
+          </button>
+          <button type="button" class="chord-btn" data-base="KeyK">
+            <span class="key-letter">K</span><span class="degree">iii</span><span class="chord-name">Em</span>
+          </button>
+          <button type="button" class="chord-btn" data-base="KeyO">
+            <span class="key-letter">O</span><span class="degree">IV</span><span class="chord-name">F</span>
+          </button>
+          <button type="button" class="chord-btn" data-base="KeyL">
+            <span class="key-letter">L</span><span class="degree">V</span><span class="chord-name">G</span>
+          </button>
+          <button type="button" class="chord-btn" data-base="KeyP">
+            <span class="key-letter">P</span><span class="degree">vi</span><span class="chord-name">Am</span>
+          </button>
+          <button type="button" class="chord-btn" data-base="Semicolon">
+            <span class="key-letter">;</span><span class="degree">vii°</span><span class="chord-name">B°</span>
+          </button>
         </div>
       </section>
     </main>
