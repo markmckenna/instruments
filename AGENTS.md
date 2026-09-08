@@ -28,6 +28,10 @@ start sharing code between instruments or wrapping them in a mobile app.
 - The root `README.md` links to each experiment's `README.md`.
 - Root-level, cross-cutting process decisions (not specific to one
   instrument) go in `PROCESS.md` at the repo root.
+- `INDEX.md` at the repo root lists every important concept in the repo
+  (one line + a link to its source of truth). Read it before writing new
+  code or planning a feature, and update it whenever a concept is added or
+  removed.
 
 ## Sharing code
 
