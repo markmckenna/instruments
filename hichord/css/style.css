@@ -1,0 +1,288 @@
+:root {
+  color-scheme: dark;
+  --bg: #14161c;
+  --panel: #1d2028;
+  --panel-border: #2c3140;
+  --text: #e9ebf2;
+  --text-dim: #9aa0b4;
+  --accent: #7ee8c1;
+  --accent-dim: #3a5a4e;
+  --key-face: #262a35;
+  --key-face-active: #7ee8c1;
+  --key-text-active: #10131a;
+  --danger: #ff6b6b;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+#app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: calc(0.75rem + var(--safe-top)) calc(0.75rem + var(--safe-right)) calc(0.75rem + var(--safe-bottom)) calc(0.75rem + var(--safe-left));
+  gap: 0.75rem;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* --- Top bar --- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.topbar h1 {
+  font-size: clamp(1.1rem, 4vw, 1.4rem);
+  margin: 0;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 0.3rem;
+}
+
+.pill-btn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--key-face);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.pill-btn:active { background: var(--accent-dim); }
+
+.display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 4.5rem;
+  line-height: 1.1;
+}
+.display-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.display-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* --- Stage --- */
+
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 1rem;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.panel-title .hint {
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-dim);
+  opacity: 0.7;
+  font-size: 0.7rem;
+}
+
+/* --- Chord keyboard: staggered to mirror physical key rows --- */
+
+.chord-keyboard {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(2, minmax(3.4rem, 1fr));
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.chord-btn {
+  background: var(--key-face);
+  border-radius: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  transition: background 60ms ease, transform 60ms ease;
+}
+.chord-btn .key-letter {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+}
+.chord-btn .degree {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+.chord-btn .chord-name {
+  font-size: clamp(1rem, 3vw, 1.3rem);
+  font-weight: 700;
+}
+.chord-btn.active {
+  background: var(--key-face-active);
+  color: var(--key-text-active);
+  transform: scale(0.96);
+}
+.chord-btn.active .key-letter,
+.chord-btn.active .degree {
+  color: var(--key-text-active);
+  opacity: 0.7;
+}
+
+/* --- Variant grid --- */
+
+.variant-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+
+.variant-btn {
+  background: var(--key-face);
+  border-radius: 0.7rem;
+  padding: 0.6rem 0.3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  transition: background 60ms ease, transform 60ms ease;
+}
+.variant-btn .key-letter {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+}
+.variant-btn .variant-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.variant-btn.active {
+  background: var(--accent);
+  color: var(--key-text-active);
+  transform: scale(0.96);
+}
+.variant-btn.active .key-letter {
+  color: var(--key-text-active);
+  opacity: 0.7;
+}
+
+/* --- Loop bar --- */
+
+.loopbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 1rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.record-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--key-face);
+  border-radius: 0.7rem;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+}
+.rec-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--danger);
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+.record-btn.recording .rec-dot {
+  opacity: 1;
+  animation: pulse 0.6s ease-in-out infinite;
+}
+.record-btn.playing .rec-dot {
+  opacity: 1;
+  background: var(--accent);
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.footnote {
+  margin: 0;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+/* --- Small screens: stack panels, keep touch targets generous --- */
+
+@media (max-width: 480px) {
+  .topbar h1 { display: none; }
+  .chord-keyboard { grid-template-rows: repeat(2, minmax(3rem, 1fr)); }
+  .footnote { display: none; }
+}
+
+@media (min-width: 700px) {
+  .stage { flex-direction: row; }
+  .panel[aria-label="Chord buttons"] { flex: 2; }
+  .panel[aria-label="Chord variants"] { flex: 1; }
+}
