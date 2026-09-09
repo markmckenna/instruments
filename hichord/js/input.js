@@ -5,7 +5,7 @@
 // music-theory one, so theory.js never sees them.
 
 import { CIRCLE_OF_FIFTHS, NEUTRAL_VARIANT } from './theory.js';
-import { AudioEngine, buildChord } from './audio.js';
+import { AudioEngine, buildChord, buildBassNote } from './audio.js';
 import { LoopRecorder } from './loop.js';
 import { Metronome } from './metronome.js';
 import { Tempo } from './tempo.js';
@@ -55,8 +55,10 @@ const OCTAVE_MIN = -3;
 const OCTAVE_MAX = 3;
 
 // Playback modes (Backquote cycles these -- see "Playback mode" below).
-// 'chord' is the original, only behavior; the rest are additive.
-const MODES = ['chord', 'bass', 'arpeggio', 'lead'];
+// 'chord' is the original, only behavior; the rest are additive. Bass isn't
+// one of these -- it's its own toggle (KeyB), orthogonal to mode -- see
+// "Bass toggle" below.
+const MODES = ['chord', 'arpeggio', 'lead'];
 
 export const engine = new AudioEngine();
 // Shared by the loop recorder (loop-length rounding, note quantizing) and
@@ -72,6 +74,7 @@ const state = {
   keyIndex: 0, // index into CIRCLE_OF_FIFTHS
   modeIndex: 0, // index into MODES
   globalOctaveShift: 0, // whole octaves, applies on top of every key's own shift below
+  bassEnabled: false, // own toggle (KeyB), independent of mode -- see "Bass toggle" below
 };
 
 // Chord buttons are polyphonic: any number can be held at once and all sound
@@ -117,6 +120,7 @@ function currentSound() {
   const soundingBases = heldBases.filter((code) => !pendingOctaveTargets.has(code));
   if (soundingBases.length === 0) return null;
   const noteSet = new Set();
+  const bassSet = new Set();
   soundingBases.forEach((code) => {
     const degreeIndex = CHORD_KEYS.findIndex((k) => k.code === code);
     const variantId = physicalVariantId || lockedModifier[code] || NEUTRAL_VARIANT;
@@ -125,25 +129,44 @@ function currentSound() {
     buildChord(CIRCLE_OF_FIFTHS[state.keyIndex].pc, degreeIndex, variantId, { octaveShift, inversionIndex, mode }).forEach(
       (n) => noteSet.add(n),
     );
+    if (state.bassEnabled) bassSet.add(buildBassNote(CIRCLE_OF_FIFTHS[state.keyIndex].pc, degreeIndex));
   });
-  return { notes: Array.from(noteSet).sort((a, b) => a - b) };
+  return {
+    notes: Array.from(noteSet).sort((a, b) => a - b),
+    bassNotes: Array.from(bassSet).sort((a, b) => a - b),
+  };
 }
 
 // Live playing and loop playback are independent engine voices ('live' and
 // 'loop' respectively, see loop.js) so one doesn't cut the other off --
 // holding a chord while a loop is playing mixes both instead of stealing the
-// loop's sound.
+// loop's sound. The bass note gets its own voice pair too ('bass'/'loop-bass')
+// only while arpeggiating, so the arpeggiator's note-by-note stepping on
+// 'live' never touches it ("don't arpeggiate the bass note") -- otherwise
+// it's simplest to just fold it into the same chord as everything else.
 function refreshSound() {
   const sound = currentSound();
   if (MODES[state.modeIndex] === 'arpeggio' && sound) {
     // Delegate entirely to the arpeggiator -- it drives engine.playChord and
     // recorder.recordEvent itself, one note at a time, on its own schedule.
     arpeggiator.start(() => currentSound()?.notes || []);
+    if (sound.bassNotes.length) {
+      engine.playChord('bass', sound.bassNotes);
+      recorder.recordEvent('on', sound.bassNotes, 'bass');
+    } else {
+      engine.stopChord('bass');
+      recorder.recordEvent('off', null, 'bass');
+    }
   } else {
     arpeggiator.stop();
+    // Any arpeggio-mode bass sustain no longer applies outside arpeggio mode
+    // (bass is folded into 'live' below instead) -- make sure it's silent.
+    engine.stopChord('bass');
+    recorder.recordEvent('off', null, 'bass');
     if (sound) {
-      engine.playChord('live', sound.notes);
-      recorder.recordEvent('on', sound.notes);
+      const notes = sound.notes.concat(sound.bassNotes);
+      engine.playChord('live', notes);
+      recorder.recordEvent('on', notes);
     } else {
       engine.stopChord('live');
       recorder.recordEvent('off', null);
@@ -166,11 +189,12 @@ export function updateUI() {
     keyOctaveShift,
     keyInversion,
     globalOctaveShift: state.globalOctaveShift,
+    bassEnabled: state.bassEnabled,
     loopState: recorder.state,
     bpm: tempo.bpm,
     quantizeDivision: tempo.quantizeDivision,
     clickEnabled: metronome.enabled,
-    playingNotes: sound ? sound.notes : [],
+    playingNotes: sound ? sound.notes.concat(sound.bassNotes).sort((a, b) => a - b) : [],
   });
 }
 
@@ -291,6 +315,17 @@ function cycleMode() {
   refreshSound();
 }
 
+// --- Bass toggle (KeyB) ----------------------------------------------------
+// Its own on/off toggle (README: an independent low root, always in octave
+// 2 -- see audio.js's buildBassNote), not a playback mode: it layers onto
+// whatever mode is already doing, rather than being one more thing mode
+// cycles through.
+function toggleBass() {
+  state.bassEnabled = !state.bassEnabled;
+  if (heldBases.length) refreshSound();
+  else updateUI();
+}
+
 function changeKey(delta) {
   state.keyIndex = (state.keyIndex + delta + CIRCLE_OF_FIFTHS.length) % CIRCLE_OF_FIFTHS.length;
   if (heldBases.length) refreshSound();
@@ -304,14 +339,69 @@ function changeBpm(delta) {
   tempo.setBpm(tempo.bpm + delta);
   updateUI();
 }
+/** Set the bpm to an exact value (the typed BPM field, or a tap-tempo cue), rather than nudging it by a step. */
+function setBpm(value) {
+  tempo.setBpm(value);
+  updateUI();
+}
 function changeQuantize(delta) {
   if (delta > 0) tempo.doubleQuantize();
   else tempo.halveQuantize();
   updateUI();
 }
+
+// A tap on the click button toggles the click; four in a row is instead read
+// as a tempo cue (README: tap along and the bpm follows). A sliding window
+// (not reset once it fires) so continuing to tap keeps refining the
+// estimate, rather than requiring exactly four and no more.
+let clickTapTimes = [];
+const TAP_MIN_INTERVAL = 0.15; // seconds -- faster than this isn't a plausible tempo tap
+const TAP_MAX_INTERVAL = 2.5; // seconds -- slower than this and it's two unrelated taps, not a cue
 function toggleClick() {
   metronome.toggle();
+  registerClickTap();
   updateUI();
+}
+function registerClickTap() {
+  // Wall-clock time, not the audio clock: this measures how far apart the
+  // user's own taps were, which has nothing to do with audio scheduling
+  // (see audio.js's AudioEngine for where ctx.currentTime is the one that
+  // matters instead).
+  const now = performance.now() / 1000;
+  clickTapTimes.push(now);
+  if (clickTapTimes.length > 4) clickTapTimes.shift();
+  if (clickTapTimes.length < 4) return;
+  const gaps = clickTapTimes.slice(1).map((t, i) => t - clickTapTimes[i]);
+  if (gaps.some((g) => g < TAP_MIN_INTERVAL || g > TAP_MAX_INTERVAL)) {
+    clickTapTimes = [now]; // not a plausible steady tap -- start over from this one
+    return;
+  }
+  const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  setBpm(60 / avgGap);
+}
+
+// Holding +/- (or the on-screen bpm buttons) repeats at a fixed typematic
+// rate instead of firing once per press -- OS key-repeat is deliberately
+// ignored everywhere else in this module (see initInput's `e.repeat` guard),
+// so this is its own timer, keyed by whichever control is being held.
+const TYPEMATIC_DELAY_MS = 400; // pause before auto-repeat kicks in
+const TYPEMATIC_RATE_MS = 60; // interval once it does
+const bpmTypematicTimers = {}; // key -> { timeout } | { interval }
+function startBpmTypematic(key, delta) {
+  if (bpmTypematicTimers[key]) return; // already held
+  changeBpm(delta); // fires once immediately, same as a plain tap
+  const timeout = setTimeout(() => {
+    const interval = setInterval(() => changeBpm(delta), TYPEMATIC_RATE_MS);
+    bpmTypematicTimers[key] = { interval };
+  }, TYPEMATIC_DELAY_MS);
+  bpmTypematicTimers[key] = { timeout };
+}
+function stopBpmTypematic(key) {
+  const timer = bpmTypematicTimers[key];
+  if (!timer) return;
+  clearTimeout(timer.timeout);
+  clearInterval(timer.interval);
+  delete bpmTypematicTimers[key];
 }
 
 function toggleRecord(down) {
@@ -319,7 +409,18 @@ function toggleRecord(down) {
     if (recorder.state !== 'recording') {
       recorder.startRecording();
       const sound = currentSound(); // capture whatever's already sounding as t=0
-      if (sound) recorder.recordEvent('on', sound.notes);
+      if (sound) {
+        if (MODES[state.modeIndex] === 'arpeggio') {
+          // The arpeggiator's own already-running poll loop will start
+          // recordEvent'ing its steps on 'main' within one tick now that
+          // state is 'recording' -- no need to capture that half here. Its
+          // sustained bass note (see refreshSound) has no such poller
+          // though, so that needs the same explicit t=0 capture as below.
+          if (sound.bassNotes.length) recorder.recordEvent('on', sound.bassNotes, 'bass');
+        } else {
+          recorder.recordEvent('on', sound.notes.concat(sound.bassNotes));
+        }
+      }
     }
   } else if (recorder.state === 'recording') {
     recorder.stopRecording();
@@ -344,6 +445,12 @@ function toggleRecord(down) {
  */
 export function initInput() {
   window.addEventListener('keydown', (e) => {
+    // Typing into the on-screen BPM field (digits, Enter, arrow keys to move
+    // the cursor) must reach the input normally, not get hijacked as an
+    // instrument shortcut -- see initPointerControls' own listener on that
+    // field, which stops propagation for the common case; this is the
+    // defense-in-depth fallback.
+    if (e.target instanceof HTMLInputElement) return;
     if (e.repeat) return;
     if (BASE_CODES.has(e.code)) { e.preventDefault(); pressBase(e.code); return; }
     if (VARIANT_CODES.has(e.code)) { e.preventDefault(); pressVariant(e.code); return; }
@@ -361,11 +468,13 @@ export function initInput() {
       case 'ArrowRight': e.preventDefault(); changeKey(1); break;
       case 'ArrowUp': e.preventDefault(); changeVoice(1); break;
       case 'ArrowDown': e.preventDefault(); changeVoice(-1); break;
-      case 'Minus': e.preventDefault(); changeBpm(-1); break;
-      case 'Equal': e.preventDefault(); changeBpm(1); break;
+      case 'Minus': e.preventDefault(); startBpmTypematic(e.code, -1); break;
+      case 'Equal': e.preventDefault(); startBpmTypematic(e.code, 1); break;
       case 'Slash': e.preventDefault(); cycleInversion(); break;
       case 'Period': e.preventDefault(); toggleLock(); break;
       case 'Backquote': e.preventDefault(); cycleMode(); break;
+      case 'KeyB': e.preventDefault(); toggleBass(); break;
+      case 'Backslash': e.preventDefault(); toggleClick(); break;
       // Space, not Tab: Tab can be intercepted by browser/OS focus-cycling
       // accessibility features (e.g. macOS's Full Keyboard Access) before the
       // page ever sees the keydown -- silently breaking recording, not just
@@ -375,9 +484,11 @@ export function initInput() {
   });
 
   window.addEventListener('keyup', (e) => {
+    if (e.target instanceof HTMLInputElement) return;
     if (BASE_CODES.has(e.code)) { e.preventDefault(); releaseBase(e.code); return; }
     if (VARIANT_CODES.has(e.code)) { e.preventDefault(); releaseVariant(e.code); return; }
     if (OCTAVE_KEYS[e.code] !== undefined) { e.preventDefault(); releaseOctaveKey(e.code); return; }
+    if (e.code === 'Minus' || e.code === 'Equal') { e.preventDefault(); stopBpmTypematic(e.code); return; }
     if (e.code === 'Space') { e.preventDefault(); toggleRecord(false); }
   });
 
@@ -398,6 +509,11 @@ function panic() {
   pendingOctaveTargets = new Set();
   arpeggiator.stop();
   engine.stopChord('live');
+  engine.stopChord('bass');
+  // A held +/- typematic timer has no keyup to stop it if focus was lost
+  // mid-hold (the same blur this safety valve exists for) -- left running
+  // it would keep nudging the bpm in the background indefinitely.
+  Object.keys(bpmTypematicTimers).forEach(stopBpmTypematic);
   if (recorder.state === 'recording') recorder.stopRecording();
   updateUI();
 }
@@ -431,13 +547,39 @@ export function initPointerControls(root) {
   root.querySelector('[data-action="key-next"]').addEventListener('click', () => changeKey(1));
   root.querySelector('[data-action="voice-prev"]').addEventListener('click', () => changeVoice(-1));
   root.querySelector('[data-action="voice-next"]').addEventListener('click', () => changeVoice(1));
-  root.querySelector('[data-action="bpm-down"]').addEventListener('click', () => changeBpm(-1));
-  root.querySelector('[data-action="bpm-up"]').addEventListener('click', () => changeBpm(1));
+  // Held, not just tapped, so the on-screen bpm buttons get the same
+  // typematic repeat as the +/- keyboard shortcut (see startBpmTypematic).
+  bindPress(
+    root.querySelector('[data-action="bpm-down"]'),
+    () => startBpmTypematic('bpm-down', -1),
+    () => stopBpmTypematic('bpm-down'),
+  );
+  bindPress(
+    root.querySelector('[data-action="bpm-up"]'),
+    () => startBpmTypematic('bpm-up', 1),
+    () => stopBpmTypematic('bpm-up'),
+  );
   root.querySelector('[data-action="quantize-down"]').addEventListener('click', () => changeQuantize(-1));
   root.querySelector('[data-action="quantize-up"]').addEventListener('click', () => changeQuantize(1));
   root.querySelector('[data-action="click-toggle"]').addEventListener('click', () => toggleClick());
   root.querySelector('[data-action="inversion"]').addEventListener('click', () => cycleInversion());
   root.querySelector('[data-action="lock"]').addEventListener('click', () => toggleLock());
   root.querySelector('[data-action="mode-cycle"]').addEventListener('click', () => cycleMode());
+  root.querySelector('[data-action="bass-toggle"]').addEventListener('click', () => toggleBass());
   bindPress(root.querySelector('[data-action="record"]'), () => toggleRecord(true), () => toggleRecord(false));
+
+  // Type a bpm directly and hit Enter to commit it; blurring without Enter
+  // reverts the field to the actual current bpm (updateUI() below re-renders
+  // its .value) rather than leaving a half-typed number displayed.
+  const bpmInput = root.querySelector('[data-display="bpm"]');
+  if (bpmInput) {
+    bpmInput.addEventListener('keydown', (e) => {
+      e.stopPropagation(); // don't also trigger the global keyboard shortcuts (see initInput's HTMLInputElement guard)
+      if (e.key !== 'Enter') return;
+      const value = parseInt(bpmInput.value, 10);
+      if (!Number.isNaN(value)) setBpm(value);
+      bpmInput.blur();
+    });
+    bpmInput.addEventListener('blur', () => updateUI());
+  }
 }

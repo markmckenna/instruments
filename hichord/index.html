@@ -32,10 +32,10 @@
         <button type="button" class="pill-btn" data-action="bpm-down" aria-label="Decrease tempo">-</button>
         <div class="display">
           <span class="display-label">BPM</span>
-          <span class="display-value" data-display="bpm">120</span>
+          <input class="display-value bpm-input" data-display="bpm" type="text" inputmode="numeric" pattern="[0-9]*" value="120" aria-label="Type a tempo and press Enter" />
         </div>
         <button type="button" class="pill-btn" data-action="bpm-up" aria-label="Increase tempo">+</button>
-        <button type="button" class="pill-btn" data-action="click-toggle" aria-label="Toggle metronome click">&#9834;</button>
+        <button type="button" class="pill-btn" data-action="click-toggle" aria-label="Toggle metronome click, or tap four times to set the tempo by feel">&#9834;</button>
       </div>
       <div class="control-group" aria-label="Quantize">
         <button type="button" class="pill-btn" data-action="quantize-down" aria-label="Coarser quantize">{</button>
@@ -59,6 +59,9 @@
           <span class="display-value" data-display="mode">Chord</span>
         </div>
         <button type="button" class="pill-btn" data-action="mode-cycle" aria-label="Cycle playback mode">`</button>
+      </div>
+      <div class="control-group" aria-label="Bass">
+        <button type="button" class="pill-btn" data-action="bass-toggle" aria-label="Toggle bass note">B</button>
       </div>
     </header>
 
@@ -137,10 +140,12 @@
     </footer>
 
     <p class="footnote">
-      Desktop: keyboard as above, arrows to change key/voice, +/- for tempo,
-      { } for quantize, Space to loop, [ ] to shift octave, / to invert, .
-      to lock a modifier, ` to change playback mode. Mobile/no keyboard: use
-      the on-screen buttons for everything.
+      Desktop: keyboard as above, arrows to change key/voice, +/- (hold to
+      repeat) or type-and-Enter for tempo, { } for quantize, \ for the click
+      (tap it four times to set tempo by feel), Space to loop, [ ] to shift
+      octave, / to invert, . to lock a modifier, ` to change playback mode, B
+      to toggle the bass note. Mobile/no keyboard: use the on-screen buttons
+      for everything.
     </p>
   </div>
 

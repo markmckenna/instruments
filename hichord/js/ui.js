@@ -6,7 +6,7 @@ import { VARIANTS, NEUTRAL_VARIANT, variantChordName, chordDisplayName } from '.
 import { midiName } from './audio.js';
 import { CHORD_KEYS, VARIANT_KEYS } from './input.js';
 
-const MODE_LABELS = { chord: 'Chord', bass: 'Bass', arpeggio: 'Arpeggio', lead: 'Lead' };
+const MODE_LABELS = { chord: 'Chord', arpeggio: 'Arpeggio', lead: 'Lead' };
 
 export function renderUI({
   key,
@@ -20,13 +20,19 @@ export function renderUI({
   keyOctaveShift,
   keyInversion,
   globalOctaveShift,
+  bassEnabled,
   loopState,
   bpm,
   quantizeDivision,
   clickEnabled,
   playingNotes,
 }) {
-  const physicalVariantId = heldVariant ? VARIANT_KEYS[heldVariant] : null;
+  // Lead mode drops every chord to just its root (see audio.js's buildChord)
+  // -- variants don't apply to a single note, so neither the chord grid's
+  // labels nor the variant grid's own "what would this do" relabeling should
+  // pretend one is in effect just because it's physically held.
+  const variantsApply = mode !== 'lead';
+  const physicalVariantId = variantsApply && heldVariant ? VARIANT_KEYS[heldVariant] : null;
 
   document.querySelectorAll('[data-base]').forEach((el) => {
     const code = el.dataset.base;
@@ -35,7 +41,7 @@ export function renderUI({
     // physically-held variant overrides everything (same precedence
     // currentSound() in input.js uses live), otherwise this key's own
     // chord-lock if it has one, otherwise the plain diatonic triad.
-    const effectiveVariant = physicalVariantId || lockedModifier[code] || NEUTRAL_VARIANT;
+    const effectiveVariant = variantsApply ? physicalVariantId || lockedModifier[code] || NEUTRAL_VARIANT : NEUTRAL_VARIANT;
     const octaveShift = globalOctaveShift + (keyOctaveShift[code] || 0);
     const inversionIndex = keyInversion[code] || 0;
     const nameEl = el.querySelector('.chord-name');
@@ -54,7 +60,7 @@ export function renderUI({
   // name, not a static label. Ambiguous with zero or several chords held
   // (which one's quality would even apply?), so those fall back to static.
   const singleDegreeIndex =
-    heldBases.length === 1 ? CHORD_KEYS.findIndex((k) => k.code === heldBases[0]) : null;
+    variantsApply && heldBases.length === 1 ? CHORD_KEYS.findIndex((k) => k.code === heldBases[0]) : null;
   document.querySelectorAll('[data-variant]').forEach((el) => {
     const code = el.dataset.variant;
     const variantId = VARIANT_KEYS[code];
@@ -66,6 +72,9 @@ export function renderUI({
         singleDegreeIndex === null ? VARIANTS[variantId].label : variantChordName(key.pc, singleDegreeIndex, variantId);
     }
     el.classList.toggle('active', code === heldVariant);
+    // Lead mode ignores variants entirely -- grey the grid out to signal
+    // holding one won't do anything, rather than leaving it looking live.
+    el.classList.toggle('disabled', !variantsApply);
   });
 
   const keyLabel = document.querySelector('[data-display="key"]');
@@ -74,8 +83,12 @@ export function renderUI({
   const voiceLabel = document.querySelector('[data-display="voice"]');
   if (voiceLabel) voiceLabel.textContent = voice.name;
 
+  // An <input> now (typing a bpm directly, see input.js), not a plain label
+  // -- .value, not .textContent. Skipped while it's actually focused so an
+  // in-progress edit (not yet committed with Enter) doesn't get clobbered by
+  // some unrelated action re-rendering the UI mid-type.
   const bpmLabel = document.querySelector('[data-display="bpm"]');
-  if (bpmLabel) bpmLabel.textContent = bpm;
+  if (bpmLabel && document.activeElement !== bpmLabel) bpmLabel.value = bpm;
 
   const quantizeLabel = document.querySelector('[data-display="quantize"]');
   if (quantizeLabel) quantizeLabel.textContent = `1/${quantizeDivision}`;
@@ -85,6 +98,9 @@ export function renderUI({
 
   const modeLabel = document.querySelector('[data-display="mode"]');
   if (modeLabel) modeLabel.textContent = MODE_LABELS[mode];
+
+  const bassBtn = document.querySelector('[data-action="bass-toggle"]');
+  if (bassBtn) bassBtn.classList.toggle('active', bassEnabled);
 
   const clickBtn = document.querySelector('[data-action="click-toggle"]');
   if (clickBtn) clickBtn.classList.toggle('active', clickEnabled);
@@ -101,9 +117,10 @@ export function renderUI({
       loopState === 'recording' ? 'Recording…' : loopState === 'playing' ? 'Looping' : 'No loop';
   }
 
-  // Diagnostic: the actual MIDI notes sounding on the 'live' voice right
-  // now, named out -- lets you check what's really playing against what you
-  // expect to hear, not just trust the chord-button label.
+  // Diagnostic: every MIDI note actually sounding right now (the chord/lead/
+  // arpeggio notes plus the bass note, if on), named out -- lets you check
+  // what's really playing against what you expect to hear, not just trust
+  // the chord-button label.
   const playingLabel = document.querySelector('[data-display="playing-notes"]');
   if (playingLabel) {
     playingLabel.textContent = playingNotes && playingNotes.length ? playingNotes.map(midiName).join(' ') : '—';

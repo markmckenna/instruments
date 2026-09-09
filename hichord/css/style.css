@@ -97,9 +97,9 @@ button {
 .control-group[aria-label="Voice"] { --group-accent: var(--accent-voice); }
 .control-group[aria-label="Tempo"],
 .control-group[aria-label="Quantize"] { --group-accent: var(--accent-mode); }
-/* Octave/Mode have no real-hardware equivalent to match a color to (see the
-   file-header comment above) -- Octave stays the default accent (it's a
-   register control, closest in kind to Key), Mode reuses Voice's yellow
+/* Octave/Mode/Bass have no real-hardware equivalent to match a color to (see
+   the file-header comment above) -- Octave and Bass stay the default accent
+   (registers/toggles, closest in kind to Key), Mode reuses Voice's yellow
    (it's also picking *how* a chord sounds, not which one). */
 .control-group[aria-label="Mode"] { --group-accent: var(--accent-voice); }
 
@@ -137,6 +137,19 @@ button {
   font-weight: 600;
 }
 .control-group .display-value { color: var(--group-accent, var(--text)); }
+/* The bpm field is a real <input> (type a tempo directly, see input.js) --
+   strip its native chrome so it reads the same as every other plain
+   .display-value, sized to fit "240" (the top of the bpm range) without
+   growing the pill on shorter numbers. */
+.bpm-input {
+  width: 2.2ch;
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: center;
+  padding: 0;
+}
+.bpm-input:focus { outline: 1px solid var(--group-accent, var(--accent)); border-radius: 0.2rem; }
 
 /* --- Stage --- */
 
@@ -334,6 +347,10 @@ button {
   color: var(--key-text-active);
   opacity: 0.7;
 }
+/* Lead mode: variants don't apply (see ui.js), so grey the grid out to show
+   holding one won't do anything. Still tappable (it's just inert, not
+   blocked) so a stray hold doesn't feel unresponsive. */
+.variant-btn.disabled { opacity: 0.4; }
 
 /* --- Now playing (diagnostic) --- */
 
