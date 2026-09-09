@@ -84,7 +84,8 @@ done.
   the chord grid the same way in reverse; the now-playing panel names the
   actual sounding notes.
 - `loop.spec.js` -- record/release starts real looping playback on the real
-  clock, live play mixes with it, Clear loop actually stops the scheduler.
+  clock, live play mixes with it, tapping `Space` alone actually stops the
+  scheduler.
 - `octave.spec.js` -- the three effects of `[`/`]` (shift a sounding chord,
   silently target a chord while held first, shift the global register when
   no chord's involved), applying to every held chord at once, and the
@@ -95,12 +96,13 @@ done.
 - `chord-lock.spec.js` -- `.` locks/updates/clears a variant on a held
   chord, a locked chord keeps sounding shaped by it once released, and a
   physically-held variant still overrides a lock live.
-- `playback-modes.spec.js` -- backtick/tap cycles Chord/Bass/Arpeggio/Lead;
-  each mode's note-set or timing, and that a mode switch never rewrites an
-  already-recorded loop.
-- `tempo.spec.js` -- bpm/quantize controls and their effect on recorded
-  timing, quantize's grid-collision edge case, loop playback phase-locking
-  to a running click, the metronome click itself.
+- `playback-modes.spec.js` -- backtick/the mode-cycle button cycles Chord/
+  Bass/Arpeggio/Lead; each mode's note-set or timing, and that a mode
+  switch never rewrites an already-recorded loop.
+- `tempo.spec.js` -- bpm/quantize controls and their `+`/`-`/`{`/`}`
+  keyboard shortcuts, their effect on recorded timing, quantize's
+  grid-collision edge case, loop playback phase-locking to a running click,
+  the metronome click itself.
 - `keyboard-and-safety.spec.js` -- OS key-repeat is ignored, and the
   blur/visibilitychange "panic" safety valve releases a held chord.
 

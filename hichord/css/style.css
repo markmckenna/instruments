@@ -103,15 +103,6 @@ button {
    (it's also picking *how* a chord sounds, not which one). */
 .control-group[aria-label="Mode"] { --group-accent: var(--accent-voice); }
 
-/* Text pill buttons (e.g. the Mode "tap" button) need more than the 2rem
-   circle a single glyph fits in. */
-.pill-btn-text {
-  width: auto;
-  padding: 0 0.6rem;
-  font-size: 0.75rem;
-  border-radius: 999px;
-}
-
 .pill-btn {
   width: 2rem;
   height: 2rem;

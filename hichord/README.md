@@ -130,7 +130,7 @@ them. The global register is shown at the top next to the other controls;
 each key's own shift (global + whatever's set on that key) shows in its
 chord name (e.g. "Am+1"), after any inversion suffix.
 
-**Playback mode** — `` ` `` (or the on-screen "tap" button) cycles what
+**Playback mode** — `` ` `` (or the on-screen `` ` `` button) cycles what
 holding a chord button actually plays, shown in the Mode display at the
 top: **Chord** (default — the full triad/variant), **Bass** (the chord plus
 its own root, 2 octaves down), **Arpeggio** (the chord's notes cycled one at
@@ -139,21 +139,22 @@ a time, at a 16th note per step at the current bpm, instead of all together),
 already recorded — a loop always plays back the actual notes it captured,
 whatever mode was live while recording them.
 
-**Tempo** — the on-screen ↓/↑ arrows tune the bpm (default 120, range
-40–240); the ♩ button toggles a metronome click, one per beat, that plays
-continuously at the current bpm regardless of recording/looping.
+**Tempo** — `+`/`-` (or the on-screen `+`/`-` buttons) tune the bpm (default
+120, range 40–240); the ♩ button toggles a metronome click, one per beat,
+that plays continuously at the current bpm regardless of recording/looping.
 
-**Quantize** — the on-screen ↓/↑ arrows halve/double the quantize grid a
-recorded note's timing snaps to (default 1/32 note). This only ever affects
-what gets *recorded* into a loop — live play always sounds exactly when you
-press, never snapped.
+**Quantize** — `{`/`}` (Shift + `[`/`]` — or the on-screen `{`/`}` buttons)
+halve/double the quantize grid a recorded note's timing snaps to (default
+1/32 note). This only ever affects what gets *recorded* into a loop — live
+play always sounds exactly when you press, never snapped.
 
 **Loop** — hold `Space` (or the on-screen record button) while you play;
 release it and the loop plays back on repeat, snapped to the nearest beat at
 the current bpm. Hold `Space` again to record a new loop (replaces the old
-one). "Clear loop" stops playback and drops it. You can keep playing chords
-live while the loop plays back — the two mix rather than one cutting the
-other off.
+one), or tap it alone (down and up, nothing held) while a loop is playing to
+cancel and drop it without recording a replacement. You can keep playing
+chords live while the loop plays back — the two mix rather than one cutting
+the other off.
 
 On a touchscreen (no physical keyboard), every control above has an on-screen
 equivalent — chord buttons, the 3x3 variant grid, the Invert/Lock buttons,
@@ -192,10 +193,9 @@ Run through this after any change, in each target browser (see below):
    playing back on its own, in time, repeating cleanly with no glitch at the
    seam. While it's playing, hold a chord button — you should hear your
    chord mixed on top of the loop, not the loop cutting out.
-8. Tap "Clear loop" — playback (and whatever it was last sounding) should
-   stop immediately. Separately, with a loop playing, tap `Space` itself
-   (down and up with nothing held) — that should also cancel and clear the
-   loop immediately, not leave its last note ringing.
+8. With a loop playing, tap `Space` itself (down and up with nothing held)
+   — playback (and whatever it was last sounding) should cancel and clear
+   immediately, not leave its last note ringing.
 9. Hold two chord buttons at once — you should hear both chords together,
    not just the most recently pressed one, and the first one's notes should
    keep sounding uninterrupted (no cut/re-attack) as the second layers in;

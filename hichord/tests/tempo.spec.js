@@ -1,6 +1,6 @@
 // Tempo (bpm + quantize grid, shared by the loop recorder and the
-// metronome click -- see tempo.js's module comment) and its on-screen
-// controls.
+// metronome click -- see tempo.js's module comment), its on-screen
+// controls, and their +/- and {/} keyboard shortcuts.
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
 import { Tempo } from '../js/tempo.js';
@@ -60,6 +60,55 @@ test('the quantize control halves/doubles the displayed resolution', async ({ pa
   await expect(quantizeDisplay).toHaveText('1/64');
 });
 
+test('the bpm control also responds to the +/- keyboard shortcut', async ({ page }) => {
+  const bpmDisplay = page.locator('[data-display="bpm"]');
+  await holdKey(page, '-');
+  await releaseKey(page, '-');
+  await expect(bpmDisplay).toHaveText('119');
+  await holdKey(page, '+');
+  await releaseKey(page, '+');
+  await holdKey(page, '+');
+  await releaseKey(page, '+');
+  await expect(bpmDisplay).toHaveText('121');
+});
+
+// { and } are Shift+[ / Shift+] on a physical keyboard, not distinct keys --
+// Playwright's keyboard.down() dispatches the bare code without inferring a
+// modifier from the character, so these hold a real Shift the same way a
+// user's finger would.
+async function holdShiftedBracket(page, code) {
+  await page.keyboard.down('Shift');
+  await holdKey(page, code);
+  await releaseKey(page, code);
+  await page.keyboard.up('Shift');
+}
+
+test('the quantize control also responds to the {/} keyboard shortcut', async ({ page }) => {
+  const quantizeDisplay = page.locator('[data-display="quantize"]');
+  await holdShiftedBracket(page, 'BracketLeft'); // coarser: 1/32 -> 1/16
+  await expect(quantizeDisplay).toHaveText('1/16');
+  await holdShiftedBracket(page, 'BracketRight'); // finer: 1/16 -> 1/32
+  await expect(quantizeDisplay).toHaveText('1/32');
+});
+
+test('{ and } -- with a chord held, they quantize instead of octave-shifting it', async ({ page }) => {
+  // Regression guard for input.js's keydown handler, where BracketLeft/
+  // BracketRight do double duty (see pressOctaveKey vs. changeQuantize):
+  // holding a chord key at the same moment is exactly the case that would
+  // otherwise shift its pitch (see octave.spec.js).
+  await holdKey(page, 'j');
+
+  const mark = await markAudio(page);
+  await holdShiftedBracket(page, 'BracketRight');
+  const events = await audioEventsSince(page, mark);
+
+  expect(events).toHaveLength(0); // no octave shift fired
+  await expect(page.locator('[data-base="KeyJ"] .chord-name')).toHaveText('C'); // pitch unchanged
+  await expect(page.locator('[data-display="quantize"]')).toHaveText('1/64'); // finer: 1/32 -> 1/64
+
+  await releaseKey(page, 'j');
+});
+
 test('recorded loop events snap to the quantize grid, live play is never touched', async ({ page }) => {
   // Coarsen the grid so a deliberately-off-beat press lands somewhere
   // clearly different from where it was actually pressed, making the snap
@@ -85,8 +134,6 @@ test('recorded loop events snap to the quantize grid, live play is never touched
   // 0.5s, so quantizing should snap it all the way down to 0, not leave it
   // at the raw, un-snapped timestamp.
   expect(onEvent.t).toBe(0);
-
-  await page.click('[data-action="clear-loop"]');
 });
 
 test('rapid chord changes at a coarse quantize grid record every chord, none silently dropped', async ({
@@ -124,8 +171,6 @@ test('rapid chord changes at a coarse quantize grid record every chord, none sil
     ...chordMidiNotes(0, 5, 'neutral'), // P
   ];
   for (const note of played) expect(recordedNotes.has(note)).toBe(true);
-
-  await page.click('[data-action="clear-loop"]');
 });
 
 test('loop playback phase-locks to a running click, not to whenever the record key was released', async ({
@@ -154,9 +199,6 @@ test('loop playback phase-locks to a running click, not to whenever the record k
   // what let a loop's repeat drift out of sync with an ongoing click the
   // longer a recording ran before being stopped.
   expect(beatsSinceClickStart).toBeCloseTo(Math.round(beatsSinceClickStart), 5);
-
-  await page.click('[data-action="clear-loop"]');
-  await page.click('[data-action="click-toggle"]');
 });
 
 test('the metronome click plays a steady click on every beat while enabled', async ({ page }) => {

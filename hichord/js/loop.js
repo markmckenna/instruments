@@ -94,19 +94,11 @@ export class LoopRecorder {
     this._startScheduler();
   }
 
-  /** Stop looping playback (keeps the recorded events, use clear() to drop them). */
+  /** Stop looping playback, keeping the recorded events (state goes back to 'idle', not dropped). */
   stopPlaying() {
     this._stopScheduler();
     this.engine.stopChord('loop', undefined, this.voice);
     if (this.state === 'playing') this.state = 'idle';
-  }
-
-  clear() {
-    this._stopScheduler();
-    this.engine.stopChord('loop', undefined, this.voice);
-    this.state = 'idle';
-    this.events = [];
-    this.loopLength = 0;
   }
 
   _stopScheduler() {

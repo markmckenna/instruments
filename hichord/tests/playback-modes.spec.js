@@ -1,4 +1,4 @@
-// Playback mode (backtick / the Mode "tap" button): cycles Chord -> Bass ->
+// Playback mode (backtick / the mode-cycle button): cycles Chord -> Bass ->
 // Arpeggio -> Lead -> back to Chord, changing what holding a chord button
 // actually plays. A loop always plays back the literal notes it captured,
 // so a mode switch after recording must never change it (see loop.js's
@@ -14,28 +14,28 @@ function sortedNoteNames(notes) {
 
 test('the mode control cycles Chord -> Bass -> Arpeggio -> Lead -> Chord', async ({ page }) => {
   const modeDisplay = page.locator('[data-display="mode"]');
-  const tapBtn = page.locator('[data-action="mode-tap"]');
+  const cycleBtn = page.locator('[data-action="mode-cycle"]');
 
   await expect(modeDisplay).toHaveText('Chord');
-  await tapBtn.click();
+  await cycleBtn.click();
   await expect(modeDisplay).toHaveText('Bass');
-  await tapBtn.click();
+  await cycleBtn.click();
   await expect(modeDisplay).toHaveText('Arpeggio');
-  await tapBtn.click();
+  await cycleBtn.click();
   await expect(modeDisplay).toHaveText('Lead');
-  await tapBtn.click();
+  await cycleBtn.click();
   await expect(modeDisplay).toHaveText('Chord');
 });
 
 test('Bass mode adds the chord\'s own root, 2 octaves down, under the triad', async ({ page }) => {
-  await page.click('[data-action="mode-tap"]'); // Chord -> Bass
+  await page.click('[data-action="mode-cycle"]'); // Chord -> Bass
 
   const notesDisplay = page.locator('[data-display="playing-notes"]');
   await holdKey(page, 'j');
   await expect(notesDisplay).toHaveText(sortedNoteNames(buildChord(0, 0, 'neutral', { mode: 'bass' })));
   await releaseKey(page, 'j');
 
-  await page.click('[data-action="mode-tap"]'); // back to Chord
+  await page.click('[data-action="mode-cycle"]'); // back to Chord
 });
 
 test('Lead mode sounds only the root, no chord', async ({ page }) => {
@@ -56,8 +56,8 @@ test('Lead mode sounds only the root, no chord', async ({ page }) => {
 });
 
 test('Arpeggio mode sequences the chord one note at a time instead of sounding it all at once', async ({ page }) => {
-  await page.click('[data-action="mode-tap"]'); // Chord -> Bass
-  await page.click('[data-action="mode-tap"]'); // Bass -> Arpeggio
+  await page.click('[data-action="mode-cycle"]'); // Chord -> Bass
+  await page.click('[data-action="mode-cycle"]'); // Bass -> Arpeggio
 
   await holdKey(page, 'j');
   await page.waitForTimeout(50);
@@ -78,13 +78,13 @@ test('Arpeggio mode sequences the chord one note at a time instead of sounding i
   expect(laterActive).toHaveLength(1);
 
   await releaseKey(page, 'j');
-  await page.click('[data-action="mode-tap"]'); // Arpeggio -> Lead
-  await page.click('[data-action="mode-tap"]'); // Lead -> Chord
+  await page.click('[data-action="mode-cycle"]'); // Arpeggio -> Lead
+  await page.click('[data-action="mode-cycle"]'); // Lead -> Chord
 });
 
 test('a mode switch after recording never changes the loop already laid down', async ({ page }) => {
-  await page.click('[data-action="mode-tap"]'); // Chord -> Bass
-  await page.click('[data-action="mode-tap"]'); // Bass -> Arpeggio
+  await page.click('[data-action="mode-cycle"]'); // Chord -> Bass
+  await page.click('[data-action="mode-cycle"]'); // Bass -> Arpeggio
 
   await holdKey(page, 'Space');
   await holdKey(page, 'j');
@@ -99,11 +99,9 @@ test('a mode switch after recording never changes the loop already laid down', a
   expect(onEvents.length).toBeGreaterThan(1);
   expect(onEvents.some((e) => e.notes && e.notes.length === 1)).toBe(true);
 
-  await page.click('[data-action="mode-tap"]'); // Arpeggio -> Lead
-  await page.click('[data-action="mode-tap"]'); // Lead -> Chord
+  await page.click('[data-action="mode-cycle"]'); // Arpeggio -> Lead
+  await page.click('[data-action="mode-cycle"]'); // Lead -> Chord
 
   const afterModeSwitch = await page.evaluate(async () => (await import('/js/input.js')).recorder.events);
   expect(afterModeSwitch).toEqual(recordedEvents);
-
-  await page.click('[data-action="clear-loop"]');
 });

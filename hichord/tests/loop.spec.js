@@ -1,5 +1,6 @@
 // Loop recorder: hold Space to record, release to start looping playback,
-// Clear loop drops it. Real timing (no fake clock) since the scheduler
+// tap Space alone (nothing held) to cancel and drop it. Real timing (no
+// fake clock) since the scheduler
 // (loop.js) drives itself off the real AudioContext clock via setInterval,
 // per its own module comment -- so the tests do too, rather than faking it.
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
@@ -83,11 +84,9 @@ test('holding the record key with a chord held actually records events', async (
   });
   expect(events.length).toBeGreaterThan(0);
   expect(state).toBe('playing');
-
-  await page.click('[data-action="clear-loop"]');
 });
 
-test('recording a note then releasing Space loops it, and Clear loop stops it', async ({ page }) => {
+test('recording a note then releasing Space loops it', async ({ page }) => {
   const recordBtn = page.locator('[data-action="record"]');
   const loopDisplay = page.locator('[data-display="loop"]');
 
@@ -98,9 +97,7 @@ test('recording a note then releasing Space loops it, and Clear loop stops it', 
   // Release Space *while J is still held* -- the recorded chord's 'on' event
   // has no matching 'off' within the recording. Per loop.js's stopRecording()
   // comment, it appends a synthetic 'off' right at the loop length instead of
-  // leaving it dangling, so the note sounds for (almost) the entire loop --
-  // which also makes "is the loop voice currently sounding" deterministic
-  // enough for the Clear-loop assertion below.
+  // leaving it dangling, so the note sounds for (almost) the entire loop.
   await holdKey(page, 'j');
   await page.waitForTimeout(150);
   await releaseKey(page, 'Space');
@@ -116,18 +113,6 @@ test('recording a note then releasing Space loops it, and Clear loop stops it', 
   await page.waitForTimeout(2000);
   const replayed = (await audioEventsSince(page, mark)).filter((e) => e.type === 'start');
   expect(replayed.length).toBeGreaterThan(0);
-
-  const clearMark = await markAudio(page);
-  await page.click('[data-action="clear-loop"]');
-  await expect(loopDisplay).toHaveText('No loop');
-  await expect(recordBtn).not.toHaveClass(/playing/);
-  const clearEvents = await audioEventsSince(page, clearMark);
-  expect(clearEvents.some((e) => e.type === 'stop')).toBe(true); // whatever the loop last triggered gets released, not left ringing
-
-  const afterClearMark = await markAudio(page);
-  await page.waitForTimeout(1200);
-  const afterClear = (await audioEventsSince(page, afterClearMark)).filter((e) => e.type === 'start');
-  expect(afterClear).toHaveLength(0); // scheduler is actually stopped, not just hidden by the UI
 });
 
 test('loop length snaps to the nearest beat, not always rounding up', async ({ page }) => {
@@ -147,8 +132,6 @@ test('loop length snaps to the nearest beat, not always rounding up', async ({ p
     return mod.recorder.loopLength;
   });
   expect(loopLength).toBe(0.5);
-
-  await page.click('[data-action="clear-loop"]');
 });
 
 test('tapping Space while a loop is playing cancels and clears it, not just stops scheduling it', async ({
@@ -208,8 +191,6 @@ test('cycling voices after recording reshapes live play but not the loop already
     ),
   ].sort((a, b) => a - b);
   expect(replayed).toEqual(expectedChordFrequencies(0, 0, 'neutral', 0)); // still Soft Pad -- the voice in effect when it was recorded, not the now-current Pluck
-
-  await page.click('[data-action="clear-loop"]');
 });
 
 test('a chord held live keeps sounding on top of loop playback', async ({ page }) => {
@@ -226,5 +207,4 @@ test('a chord held live keeps sounding on top of loop playback', async ({ page }
   expect(startedLive.length).toBeGreaterThan(0);
 
   await releaseKey(page, 'o');
-  await page.click('[data-action="clear-loop"]');
 });

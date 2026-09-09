@@ -347,12 +347,22 @@ export function initInput() {
     if (e.repeat) return;
     if (BASE_CODES.has(e.code)) { e.preventDefault(); pressBase(e.code); return; }
     if (VARIANT_CODES.has(e.code)) { e.preventDefault(); pressVariant(e.code); return; }
-    if (OCTAVE_KEYS[e.code] !== undefined) { e.preventDefault(); pressOctaveKey(e.code); return; }
+    if (OCTAVE_KEYS[e.code] !== undefined) {
+      e.preventDefault();
+      // The bracket keys do double duty, shifted: [ ]/octave unshifted (see
+      // pressOctaveKey), { }/quantize with Shift held -- same physical keys
+      // as their on-screen affordance, no separate binding to remember.
+      if (e.shiftKey) changeQuantize(e.code === 'BracketRight' ? 1 : -1);
+      else pressOctaveKey(e.code);
+      return;
+    }
     switch (e.code) {
       case 'ArrowLeft': e.preventDefault(); changeKey(-1); break;
       case 'ArrowRight': e.preventDefault(); changeKey(1); break;
       case 'ArrowUp': e.preventDefault(); changeVoice(1); break;
       case 'ArrowDown': e.preventDefault(); changeVoice(-1); break;
+      case 'Minus': e.preventDefault(); changeBpm(-1); break;
+      case 'Equal': e.preventDefault(); changeBpm(1); break;
       case 'Slash': e.preventDefault(); cycleInversion(); break;
       case 'Period': e.preventDefault(); toggleLock(); break;
       case 'Backquote': e.preventDefault(); cycleMode(); break;
@@ -428,10 +438,6 @@ export function initPointerControls(root) {
   root.querySelector('[data-action="click-toggle"]').addEventListener('click', () => toggleClick());
   root.querySelector('[data-action="inversion"]').addEventListener('click', () => cycleInversion());
   root.querySelector('[data-action="lock"]').addEventListener('click', () => toggleLock());
-  root.querySelector('[data-action="mode-tap"]').addEventListener('click', () => cycleMode());
+  root.querySelector('[data-action="mode-cycle"]').addEventListener('click', () => cycleMode());
   bindPress(root.querySelector('[data-action="record"]'), () => toggleRecord(true), () => toggleRecord(false));
-  root.querySelector('[data-action="clear-loop"]').addEventListener('click', () => {
-    recorder.clear();
-    updateUI();
-  });
 }
