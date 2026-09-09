@@ -5,11 +5,10 @@
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
 import { chordMidiNotes, expectedChordFrequencies, expectedTransition } from './support/expected-audio.js';
-import { CHORD_KEYS, DEGREES, CIRCLE_OF_FIFTHS, chordRootName } from '../js/theory.js';
-import { QUALITY_SUFFIX } from '../js/ui.js';
+import { CHORD_KEYS, CIRCLE_OF_FIFTHS, variantChordName } from '../js/theory.js';
 
 function expectedChordName(keyPc, degreeIndex) {
-  return chordRootName(keyPc, degreeIndex) + QUALITY_SUFFIX[DEGREES[degreeIndex].quality];
+  return variantChordName(keyPc, degreeIndex, 'KeyS'); // neutral variant == the plain diatonic triad name
 }
 
 test('page loads with the documented defaults', async ({ page }) => {

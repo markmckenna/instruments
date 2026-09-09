@@ -86,6 +86,54 @@ test.describe('variants', () => {
     await releaseKey(page, ';');
   });
 
+  test('6sus2 gives a 6th chord (3rd kept, 6th added) over a major degree', async ({ page }) => {
+    await holdKey(page, 'j'); // degree 0, I, major triad
+
+    const before = chordMidiNotes(0, 0, 'KeyS');
+    const after = chordMidiNotes(0, 0, 'KeyZ');
+    const { started } = expectedTransition(before, after);
+
+    const mark = await markAudio(page);
+    await holdKey(page, 'z');
+    const events = await audioEventsSince(page, mark);
+    expect(eventFreqs(events, 'start')).toEqual(started);
+
+    await releaseKey(page, 'z');
+    await releaseKey(page, 'j');
+  });
+
+  test('6sus2 gives a sus2 (3rd replaced by 2nd, no 6th) over a minor degree', async ({ page }) => {
+    await holdKey(page, 'i'); // degree 1, ii, minor triad
+
+    const before = chordMidiNotes(0, 1, 'KeyS');
+    const after = chordMidiNotes(0, 1, 'KeyZ');
+    const { started } = expectedTransition(before, after);
+
+    const mark = await markAudio(page);
+    await holdKey(page, 'z');
+    const events = await audioEventsSince(page, mark);
+    expect(eventFreqs(events, 'start')).toEqual(started);
+
+    await releaseKey(page, 'z');
+    await releaseKey(page, 'i');
+  });
+
+  test('6sus2 gives a sus2 over the diminished vii° degree too, not a 6th', async ({ page }) => {
+    await holdKey(page, ';'); // degree 6, vii°, diminished triad
+
+    const before = chordMidiNotes(0, 6, 'KeyS');
+    const after = chordMidiNotes(0, 6, 'KeyZ');
+    const { started } = expectedTransition(before, after);
+
+    const mark = await markAudio(page);
+    await holdKey(page, 'z');
+    const events = await audioEventsSince(page, mark);
+    expect(eventFreqs(events, 'start')).toEqual(started);
+
+    await releaseKey(page, 'z');
+    await releaseKey(page, ';');
+  });
+
   test('releasing the variant while the chord is still held swaps back to the plain triad', async ({
     page,
   }) => {

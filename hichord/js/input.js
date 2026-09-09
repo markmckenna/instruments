@@ -67,6 +67,7 @@ function refreshSound() {
 }
 
 export function updateUI() {
+  const sound = currentSound();
   renderUI({
     key: CIRCLE_OF_FIFTHS[state.keyIndex],
     voice: engine.voice,
@@ -76,6 +77,7 @@ export function updateUI() {
     bpm: tempo.bpm,
     quantizeDivision: tempo.quantizeDivision,
     clickEnabled: metronome.enabled,
+    playingNotes: sound ? sound.notes : [],
   });
 }
 

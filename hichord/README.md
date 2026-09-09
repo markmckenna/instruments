@@ -51,12 +51,29 @@ stealing the sound:
 | Degree | I | ii | iii | IV | V | vi | vii° |
 
 **Variants** — hold a grid key *at the same time as* a chord key to reshape
-the held chord; release the variant key to go back to the plain chord:
+the held chord; release the variant key to go back to the plain chord.
+Both M7 and 6sus2 depend on the base chord's quality: M7 gives a major 7th
+over a major chord, a minor 7th over a minor chord, and a half-diminished
+(m7♭5) over the diminished vii° chord; 6sus2 gives a 6th chord over a major
+degree (I, IV, V) but a sus2 over a minor or diminished one (ii, iii, vi,
+vii°):
 
 |     | Q: aug | W: Mm flip | E: dom7 |
 |---|---|---|---|
 |     | A: dim | S: neutral | D: M7 |
 |     | Z: 6sus2 | X: sus4 | C: 9 |
+
+While exactly one chord button is held, the variant grid relabels to show
+the actual chord each one would produce (e.g. holding `J` shows the M7
+button as "Cmaj7"); while a variant is held, the chord grid relabels the
+same way in reverse, showing what each chord button would produce with it.
+Both revert to their plain/static labels the moment that's ambiguous (no
+chord held, or two-or-more chord buttons held at once).
+
+**Now playing** — below the variant grid, the exact notes currently
+sounding (e.g. "C4 E4 G4"), live off the same signal that drives the chord
+buttons' sound — a quick way to check what's actually playing if something
+doesn't sound quite right.
 
 **Key** — `←` / `→` (or the on-screen arrows) step through all 12 keys in
 circle-of-fifths order.
@@ -141,6 +158,12 @@ Run through this after any change, in each target browser (see below):
 14. Change the quantize control down a couple of notches (coarser, e.g.
     1/8) and record a loop pressing slightly off the beat on purpose — the
     loop should audibly snap closer to the beat than you actually played it.
+15. Hold `J` — the variant grid should relabel to real chord names (e.g. D
+    shows "Cmaj7"); release it and the grid should go back to "aug"/"M7"/etc.
+    Hold `D` alone (no chord) — the chord grid should relabel to "…m7" names;
+    release it and the grid goes back to plain triad names. The "now
+    playing" notes below the variant grid should update to match whatever's
+    actually sounding as you do this.
 
 ## Browser support
 

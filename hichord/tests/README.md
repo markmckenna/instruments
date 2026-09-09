@@ -42,12 +42,19 @@ Or standalone: `npm ci && npx playwright install chromium && npx playwright test
 - `variants.spec.js` -- the QWE/ASD/ZXC grid: a variant change only
   starts/stops the notes that actually differ, leaving any note shared with
   the previous chord sounding untouched, plus quality-dependent variants
-  (M7, Mm flip) over major/minor/diminished bases.
+  (M7, Mm flip, 6sus2) over major/minor/diminished bases.
 - `key-voice.spec.js` -- key switching relabels every chord button and
   reconciles a held chord's notes by exact pitch; voice switching changes
   the actual oscillator layout used.
+- `dynamic-labels.spec.js` -- holding one chord relabels the variant grid to
+  real chord names (and reverts once released, or once a second chord is
+  also held); holding a variant relabels the chord grid the same way in
+  reverse; the now-playing panel names the actual sounding notes.
 - `loop.spec.js` -- record/release starts real looping playback on the real
   clock, live play mixes with it, Clear loop actually stops the scheduler.
+- `tempo.spec.js` -- bpm/quantize controls and their effect on recorded
+  timing, quantize's grid-collision edge case, loop playback phase-locking
+  to a running click, the metronome click itself.
 - `keyboard-and-safety.spec.js` -- OS key-repeat is ignored, and the
   blur/visibilitychange "panic" safety valve releases a held chord.
 

@@ -48,21 +48,52 @@ export function pcName(pc) {
   return NOTE_NAMES[((pc % 12) + 12) % 12];
 }
 
+// Chord-symbol suffix for each of a diatonic triad's three possible
+// qualities -- the single source of truth for how a plain (no variant, or
+// the neutral variant) triad is labeled, and the base every other variant's
+// `suffix` below builds on.
+export const QUALITY_SUFFIX = { maj: '', min: 'm', dim: '°' };
+
 // The 3x3 chord-variant grid (README: "QWE-ASD-ZXC provide chord variants
 // while held, in order: augmented, Mm flip, dom7, dim, neutral, M7, 6sus2,
 // sus4, 9"). Each variant is a function of the base degree's diatonic
 // quality -> semitone offsets from the chord root, so e.g. "M7" adds a
-// major 7th over a major triad but a minor 7th over a minor one.
+// major 7th over a major triad but a minor 7th over a minor one. `suffix`
+// is the matching chord-symbol suffix for display (see variantChordName) --
+// kept alongside `offsets` rather than derived from it, since a couple of
+// variants (6sus2, M7) change *shape* by quality in a way a generic
+// interval-to-symbol mapping would have to special-case anyway.
 export const VARIANTS = {
-  KeyQ: { label: 'aug', offsets: () => [0, 4, 8] },
-  KeyW: { label: 'Mm flip', offsets: (q) => (q === 'maj' ? [0, 3, 7] : [0, 4, 7]) },
-  KeyE: { label: 'dom7', offsets: () => [0, 4, 7, 10] },
-  KeyA: { label: 'dim', offsets: () => [0, 3, 6] },
-  KeyS: { label: 'neutral', offsets: (q) => (q === 'maj' ? [0, 4, 7] : q === 'min' ? [0, 3, 7] : [0, 3, 6]) },
-  KeyD: { label: 'M7', offsets: (q) => (q === 'maj' ? [0, 4, 7, 11] : q === 'min' ? [0, 3, 7, 10] : [0, 3, 6, 10]) },
-  KeyZ: { label: '6sus2', offsets: () => [0, 2, 7, 9] },
-  KeyX: { label: 'sus4', offsets: () => [0, 5, 7] },
-  KeyC: { label: '9', offsets: () => [0, 4, 7, 10, 14] },
+  KeyQ: { label: 'aug', offsets: () => [0, 4, 8], suffix: () => 'aug' },
+  KeyW: {
+    label: 'Mm flip',
+    offsets: (q) => (q === 'maj' ? [0, 3, 7] : [0, 4, 7]),
+    suffix: (q) => (q === 'maj' ? 'm' : ''), // flips to the *other* triad quality
+  },
+  KeyE: { label: 'dom7', offsets: () => [0, 4, 7, 10], suffix: () => '7' },
+  KeyA: { label: 'dim', offsets: () => [0, 3, 6], suffix: () => '°' },
+  KeyS: {
+    label: 'neutral',
+    offsets: (q) => (q === 'maj' ? [0, 4, 7] : q === 'min' ? [0, 3, 7] : [0, 3, 6]),
+    suffix: (q) => QUALITY_SUFFIX[q], // unmodified -- same suffix the plain triad already uses
+  },
+  KeyD: {
+    label: 'M7',
+    offsets: (q) => (q === 'maj' ? [0, 4, 7, 11] : q === 'min' ? [0, 3, 7, 10] : [0, 3, 6, 10]),
+    suffix: (q) => (q === 'maj' ? 'maj7' : q === 'min' ? 'm7' : 'm7♭5'),
+  },
+  KeyZ: {
+    label: '6sus2',
+    // Major degrees (I, IV, V) get a 6th chord (add6, 3rd kept); minor and
+    // diminished degrees (ii, iii, vi, vii°) get a sus2 (3rd replaced by the
+    // 2nd) instead -- two different, quality-picked shapes under one button,
+    // not one shape covering both at once as the original "6sus2" name
+    // (and the real HiChord's paired "6th/Sus2" joystick direction) implied.
+    offsets: (q) => (q === 'maj' ? [0, 4, 7, 9] : [0, 2, 7]),
+    suffix: (q) => (q === 'maj' ? '6' : 'sus2'),
+  },
+  KeyX: { label: 'sus4', offsets: () => [0, 5, 7], suffix: () => 'sus4' },
+  KeyC: { label: '9', offsets: () => [0, 4, 7, 10, 14], suffix: () => '9' },
 };
 
 // Row-major layout of the grid above, for building the on-screen 3x3 UI.
@@ -101,4 +132,23 @@ export function buildChord(keyPc, degreeIndex, variantCode, baseMidi = 60) {
 export function chordRootName(keyPc, degreeIndex) {
   const degree = DEGREES[degreeIndex];
   return pcName(keyPc + degree.interval);
+}
+
+/**
+ * Full chord-symbol name (root + quality/variant suffix) for a chord button
+ * + variant -- e.g. "Cmaj7", "Am7♭5", "F6". Passing 'KeyS' (or any falsy
+ * code) gives the plain diatonic triad name, so this one function covers
+ * both "what's this button labeled right now" (variant held or not) and
+ * "what would this variant do to the currently-held chord" (see ui.js).
+ */
+export function variantChordName(keyPc, degreeIndex, variantCode) {
+  const degree = DEGREES[degreeIndex];
+  const variant = VARIANTS[variantCode] || VARIANTS.KeyS;
+  return chordRootName(keyPc, degreeIndex) + variant.suffix(degree.quality);
+}
+
+/** Scientific pitch notation for a MIDI note number, e.g. 60 -> "C4". */
+export function midiName(midi) {
+  const octave = Math.floor(midi / 12) - 1;
+  return pcName(midi) + octave;
 }

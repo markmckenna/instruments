@@ -35,13 +35,23 @@ they are below.
     any other variant is.
   - `M7` (D): adds a 7th *using the base chord's own quality* — major 7th
     over a major triad, minor 7th over a minor one, and a half-diminished
-    (m7♭5, `[0,3,6,10]`) over the diminished vii° button. This is the one
-    variant that depends on the base chord's quality rather than overriding
-    it, matching the real device's "maj7/min7" joystick direction.
-  - `6sus2` (Z): `[0,2,7,9]` — root, 2nd, 5th, 6th; no 3rd. A sus2/add6
-    voicing (common pop-chord color), matching the joystick's paired
-    "6th/Sus2" direction as one merged variant rather than two.
-  - `sus4` (X): `[0,5,7]` — suspended triad, no 3rd.
+    (m7♭5, `[0,3,6,10]`) over the diminished vii° button. Depends on the
+    base chord's quality rather than overriding it, matching the real
+    device's "maj7/min7" joystick direction.
+  - `6sus2` (Z): also quality-dependent, and in a stronger sense than M7 —
+    it's two genuinely different shapes, not one shape with a note that
+    changes. Major degrees (I, IV, V) get a 6th chord, `[0,4,7,9]` (3rd
+    kept, 6th added); minor and diminished degrees (ii, iii, vi, vii°) get a
+    sus2, `[0,2,7]` (3rd replaced by the 2nd, no 6th) instead. An earlier
+    version forced one merged `[0,2,7,9]` shape (sus2 *and* add6 at once)
+    regardless of quality, mirroring the real joystick's paired "6th/Sus2"
+    direction literally — musically wrong for half the buttons, since a
+    6th chord doesn't suit a minor triad the way a 6/9-ish major voicing
+    does, and vice versa for sus2 over a major triad.
+  - `sus4` (X): `[0,5,7]` — suspended triad, no 3rd. Not quality-dependent
+    (unlike 6sus2) — a suspended 4th reads the same regardless of what
+    3rd it's replacing, so there's no analogous "wrong over half the
+    buttons" problem to fix here.
   - `9` (C): `[0,4,7,10,14]` — dominant 9th (root, 3, 5, ♭7, 9).
 
   These are documented value judgments, not the only valid reading of a
@@ -357,6 +367,41 @@ they are below.
   shipping hardware edition). Exact photos of the device's chord-button
   coloring weren't available at the time of writing, so those buttons stay a
   neutral single color (as before) rather than guessing per-button colors.
+
+## Dynamic labeling and the now-playing panel
+
+- **Both grids relabel to show real chord names, not just static
+  descriptions**: while exactly one chord button is held, the variant grid
+  shows what each variant would actually do to it (e.g. holding J shows the
+  M7 button as "Cmaj7", not just "M7"); while a variant is held, the chord
+  grid shows what each chord button would actually produce with it (e.g.
+  holding D relabels every chord button to "…m7"/"…maj7"/"…m7♭5" as
+  appropriate). Both fall back to their static labels — `VARIANTS[code].label`
+  for variants, the plain diatonic triad name for chords — the moment
+  there's no single unambiguous chord/variant to compute against (nothing
+  held, or two-or-more chord buttons held at once: which one's quality
+  would even apply?). One function, `theory.js`'s `variantChordName(keyPc,
+  degreeIndex, variantCode)`, computes both directions and also the default
+  (unheld) chord name (`variantCode: 'KeyS'` reduces to the plain triad) —
+  `ui.js` doesn't special-case "nothing held" separately from "a variant is
+  held", it always calls the same function with whichever variant code is
+  actually in effect.
+- **`suffix` lives beside `offsets` in `VARIANTS`, not derived from it**: a
+  generic "these intervals map to this chord symbol" function would need to
+  special-case 6sus2 and M7 anyway (their *shape*, not just their name,
+  depends on quality), so there's no real generality to gain by deriving the
+  suffix from the interval list instead of just stating it directly.
+- **The now-playing panel is a diagnostic, not a decorative flourish**: it
+  shows the exact MIDI notes currently sounding on the `'live'` voice, named
+  in scientific pitch notation (`theory.js`'s `midiName`, e.g. "C4") — a way
+  to check what's *actually* playing against what you expect to hear,
+  independent of trusting a chord button's label. Placed in the Variants
+  panel below its 3x3 grid, which is otherwise dead space in the
+  side-by-side desktop layout (that panel is shorter than the Chords panel
+  next to it). Scoped to the live voice only, not the loop's playback too —
+  the diagnostic use case is checking what you're playing right now, and
+  showing two voices' notes interleaved in one line would need a way to
+  tell them apart that isn't obviously worth the complexity yet.
 
 ## Automated testing
 

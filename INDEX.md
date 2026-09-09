@@ -41,7 +41,10 @@ whenever a concept is added or removed (see `~/.claude/CLAUDE.md`
   [`hichord/js/metronome.js`](hichord/js/metronome.js), decisions in
   [`hichord/DECISIONS.md`](hichord/DECISIONS.md#tempo-click-track-and-quantize)
 - **UI rendering** — reads app state, updates the static markup (no DOM
-  construction in JS). [`hichord/js/ui.js`](hichord/js/ui.js)
+  construction in JS); dynamic chord/variant grid relabeling and the
+  now-playing notes diagnostic. [`hichord/js/ui.js`](hichord/js/ui.js),
+  decisions in
+  [`hichord/DECISIONS.md`](hichord/DECISIONS.md#dynamic-labeling-and-the-now-playing-panel)
 - **Automated integration tests** — Playwright driving the real page/audio
   in a real browser; covers chords, variants, key/voice, loop, keyboard
   safety valves. [`hichord/tests/README.md`](hichord/tests/README.md),
