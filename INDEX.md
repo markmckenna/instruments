@@ -21,23 +21,31 @@ or planning a feature; update it whenever a concept is added or removed.
 
 - **Chord & variant theory** — the music-theory model, entirely in the
   abstract (circle of fifths, diatonic degrees, quality-dependent variant
-  shapes) and the chord-symbol name to display for one; no keycodes, no MIDI.
+  shapes, inversion as a structural rotation of a chord's own offsets) and
+  the chord-symbol name to display for one; no keycodes, no MIDI.
   [`hichord/js/theory.js`](hichord/js/theory.js)
-- **Audio engine** — turning an abstract chord/variant into actual MIDI
-  pitches and then into sound: independent per-voice polyphony where each
-  note attacks/releases only when it actually needs to (nothing retriggers
-  just because the chord around it changed), envelope shaping, and gain
-  staging to avoid clipping. [`hichord/js/audio.js`](hichord/js/audio.js)
+- **Audio engine** — turning an abstract chord/variant/inversion/octave-shift
+  and playback mode into actual MIDI pitches and then into sound:
+  independent per-voice polyphony where each note attacks/releases only when
+  it actually needs to (nothing retriggers just because the chord around it
+  changed), envelope shaping, and gain staging to avoid clipping.
+  [`hichord/js/audio.js`](hichord/js/audio.js)
 - **Input handling** — translating keyboard/pointer input into "what chord +
   variant is currently held" (polyphonic chord buttons, a single-variant
-  "joystick" control), including the physical-key layout itself, plus a
-  safety valve for lost focus. [`hichord/js/input.js`](hichord/js/input.js)
+  "joystick" control, per-key octave/inversion/locked-modifier state, a
+  global octave register, and the current playback mode), including the
+  physical-key layout itself, plus a safety valve for lost focus.
+  [`hichord/js/input.js`](hichord/js/input.js)
 - **Loop handling** — recording what's played into a beat-quantized,
   looping sequence, and replaying it through a lookahead scheduler
   phase-locked to the shared tempo. [`hichord/js/loop.js`](hichord/js/loop.js)
+- **Arpeggiation** — sequencing a held chord's notes one at a time instead of
+  together, on its own tempo-driven clock, reusing the audio engine's
+  exact-pitch reconciliation to step from note to note.
+  [`hichord/js/arpeggiator.js`](hichord/js/arpeggiator.js)
 - **Time/tempo handling** — the shared bpm/quantize-resolution state
-  everything else (looping, the metronome) reads from, and the practice
-  click itself. [`hichord/js/tempo.js`](hichord/js/tempo.js),
+  everything else (looping, the metronome, arpeggiation) reads from, and the
+  practice click itself. [`hichord/js/tempo.js`](hichord/js/tempo.js),
   [`hichord/js/metronome.js`](hichord/js/metronome.js)
 - **UI management** — rendering held/available state onto the static
   markup, including labels that dynamically reflect what a control would

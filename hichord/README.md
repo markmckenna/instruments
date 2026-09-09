@@ -81,6 +81,27 @@ same way in reverse, showing what each chord button would produce with it.
 Both revert to their plain/static reading the moment that's ambiguous (no
 chord held, or two-or-more chord buttons held at once).
 
+**Inversions** — hold a chord button and tap `/` (or the "Invert" button) to
+cycle that key's inversion: root position → 1st → 2nd → ... → back to root,
+one step further up per tap. Holding more than one chord button at once
+cycles all of them together. An inversion is remembered per chord button
+until changed again, and shown in the chord name (e.g. "Am/1i" for 1st
+inversion), stacking after any variant suffix and before an octave suffix
+(e.g. "Am/1i+1"). It survives a variant change on that button too — the
+rotation is expressed as "how many of the current notes to lift", not a
+fixed voicing, so switching to a variant with a different note count still
+lands on a sensible voicing of the new shape instead of a jarring leap.
+
+**Chord lock** — while holding both a chord button and a variant, tap `.`
+(or the "Lock" button) to lock that variant to the chord, so it keeps
+sounding shaped that way even after you let go of the variant — the chord
+name reflects this the same way it would if you were still holding the
+variant. Tap `.` again while holding just the chord (no variant) to remove
+the lock, or while holding the chord + a different variant to switch the
+lock to that one. A variant you're physically holding still overrides every
+button's lock while it's held, same as it already overrides everything else
+live.
+
 **Now playing** — below the variant grid, the exact notes currently
 sounding (e.g. "C4 E4 G4"), live off the same signal that drives the chord
 buttons' sound — a quick way to check what's actually playing if something
@@ -91,6 +112,32 @@ circle-of-fifths order.
 
 **Voice** — `↑` / `↓` (or the on-screen arrows) cycle through 4 sounds: Soft
 Pad (default), Pluck, Organ, Warm Pad.
+
+**Octave shift** — `[` / `]` (or the on-screen brackets) do one of three
+things depending on what's held:
+- Held chord button(s) already sounding, then tap `[`/`]`: shifts their
+  pitch an octave immediately, audibly, while they keep sounding.
+- `[`/`]` held first (nothing else down yet), then a chord button tapped
+  (pressed and released) while it's still held: shifts that button's pitch
+  silently instead of sounding it — for setting up a key's octave before you
+  actually play it.
+- `[`/`]` tapped alone, with no chord button ever pressed during that tap:
+  shifts the *global* octave register instead, on top of whatever any
+  individual keys are already shifted by.
+
+Holding more than one chord button applies the first two cases to all of
+them. The global register is shown at the top next to the other controls;
+each key's own shift (global + whatever's set on that key) shows in its
+chord name (e.g. "Am+1"), after any inversion suffix.
+
+**Playback mode** — `` ` `` (or the on-screen "tap" button) cycles what
+holding a chord button actually plays, shown in the Mode display at the
+top: **Chord** (default — the full triad/variant), **Bass** (the chord plus
+its own root, 2 octaves down), **Arpeggio** (the chord's notes cycled one at
+a time, at a 16th note per step at the current bpm, instead of all together),
+**Lead** (just the root, no chord). Switching mode never changes a loop
+already recorded — a loop always plays back the actual notes it captured,
+whatever mode was live while recording them.
 
 **Tempo** — the on-screen ↓/↑ arrows tune the bpm (default 120, range
 40–240); the ♩ button toggles a metronome click, one per beat, that plays
@@ -109,8 +156,9 @@ live while the loop plays back — the two mix rather than one cutting the
 other off.
 
 On a touchscreen (no physical keyboard), every control above has an on-screen
-equivalent — chord buttons, the 3x3 variant grid, key/voice/tempo/quantize
-arrows, the click toggle, and the record button all respond to touch/tap-and-
+equivalent — chord buttons, the 3x3 variant grid, the Invert/Lock buttons,
+key/voice/octave/mode/tempo/quantize controls, the click toggle, and the
+record button all respond to touch/tap-and-
 hold the same way keys do.
 
 ## Automated tests
@@ -174,6 +222,28 @@ Run through this after any change, in each target browser (see below):
     release it and the grid goes back to plain triad names. The "now
     playing" notes below the variant grid should update to match whatever's
     actually sounding as you do this.
+16. Hold `J`, tap `/` twice — the button should relabel "C/2i" and the
+    voicing should audibly change each tap without a click/pop. Release and
+    hold `J` again — the inversion should still be "/2i" (it's remembered
+    per key). Tap `/` a third time — it should cycle back to plain "C".
+17. Hold `J`, tap `[` then `]` — the button's octave suffix should show
+    "-1" then back to "0", audibly shifting down and back up while `J` stays
+    held. Release `J`. Hold `[` alone (nothing else down), tap `J` once
+    while still holding `[` — `J` should *not* sound, and releasing `[`
+    should leave the Octave display and "C" both unchanged (the tap was
+    absorbed as a silent per-key adjustment, not a global one — hold `[`
+    again with no chord touched at all this time to confirm the global
+    Octave display *does* change).
+18. Hold `J` and `D` (M7) together, tap `.` — release both, `J` alone
+    should now read "Cmaj7" and keep sounding that way. Hold `J` alone and
+    tap `.` again — it should revert to plain "C".
+19. Tap the Mode control (or `` ` ``) through Chord → Bass → Arpeggio →
+    Lead → back to Chord. Hold `J` in each: Bass should add a low root
+    under the triad, Arpeggio should cycle the triad's notes one at a time
+    instead of all together, Lead should sound only the root. Record a
+    short loop in Arpeggio mode, switch to Chord mode, and play it back —
+    the loop should still play the arpeggiated pattern it was recorded
+    with, unaffected by the mode switch.
 
 ## Browser support
 
@@ -190,9 +260,8 @@ audio before a user gesture), not a bug.
 
 - Loop recorder captures one loop at a time; no overdub/multi-track layering
   (you can play live over the loop, but that play isn't added into it).
-- No persistence — reloading the page resets key/voice/loop/tempo/quantize.
-- No octave-shift control (the real HiChord has one on its joystick; this
-  experiment's spec doesn't call for one).
+- No persistence — reloading the page resets key/voice/octave/mode/loop/
+  tempo/quantize, and every chord button's own inversion/lock/octave state.
 - No MIDI I/O.
 - No on-screen bar-count control — loop length is whatever you actually
   played, snapped to the nearest beat, not a fixed number of bars.
