@@ -17,7 +17,7 @@
 // VARIANTS describe chord *shape* in the abstract (scale degrees, semitone
 // offsets from a root); turning that into actual MIDI note numbers and
 // pitch names is audio-side math, alongside _freqFor below.
-import { DEGREES, VARIANTS, NEUTRAL_VARIANT, pcName } from './theory.js';
+import { DEGREES, VARIANTS, NEUTRAL_VARIANT, invertOffsets, pcName } from './theory.js';
 
 /** Scientific pitch notation for a MIDI note number, e.g. 60 -> "C4". */
 export function midiName(midi) {
@@ -32,22 +32,34 @@ export function midiName(midi) {
  * @param {number} keyPc pitch class of the current key's root (0-11)
  * @param {number} degreeIndex index into theory.js's DEGREES (0-6)
  * @param {string} variantId an id in theory.js's VARIANTS (defaults to the neutral/center one)
- * @param {number} baseMidi MIDI note the key root is anchored near
+ * @param {object} [options]
+ * @param {number} [options.baseMidi] MIDI note the key root is anchored near (default 60)
+ * @param {number} [options.octaveShift] whole octaves to transpose this chord's root by -- global register + this key's own offset, see input.js
+ * @param {number} [options.inversionIndex] which inversion to voice, see theory.js's invertOffsets
+ * @param {'chord'|'bass'|'arpeggio'|'lead'} [options.mode] playback mode (see input.js): 'arpeggio' shapes the note *set* the same as 'chord' -- sequencing it one at a time is input.js's Arpeggiator's job, not this function's; 'lead' drops the chord to just its root; 'bass' adds a low root note under it
  * @returns {number[]} MIDI note numbers, root first
  */
-export function buildChord(keyPc, degreeIndex, variantId, baseMidi = 60) {
+export function buildChord(keyPc, degreeIndex, variantId, options = {}) {
+  const { baseMidi = 60, octaveShift = 0, inversionIndex = 0, mode = 'chord' } = options;
   const degree = DEGREES[degreeIndex];
-  const variant = VARIANTS[variantId] || VARIANTS[NEUTRAL_VARIANT];
-  const offsets = variant.offsets(degree.quality);
   // No modulo here (unlike chordRootName's pitch-class-only naming in
   // theory.js): DEGREES' intervals are 0-11 and already strictly increasing
   // with degree index, so anchoring the root at baseMidi + keyPc + interval
   // (rather than wrapping back into a single octave band) guarantees the
   // tonic (interval 0) is always the lowest-rooted chord for the current
   // key, and each further degree in the JIKOLP; sequence sits higher than
-  // the last.
-  const rootMidi = baseMidi + keyPc + degree.interval;
-  return offsets.map((o) => rootMidi + o);
+  // the last. octaveShift then just transposes that anchored root further.
+  const rootMidi = baseMidi + keyPc + degree.interval + octaveShift * 12;
+
+  if (mode === 'lead') return [rootMidi]; // root only -- variant/inversion don't apply to a single note
+
+  const variant = VARIANTS[variantId] || VARIANTS[NEUTRAL_VARIANT];
+  const offsets = invertOffsets(variant.offsets(degree.quality), inversionIndex);
+  const notes = offsets.map((o) => rootMidi + o);
+
+  if (mode === 'bass') notes.push(rootMidi - 24); // this chord's own root, 2 octaves down, regardless of the voicing (incl. inversion) above it
+
+  return notes;
 }
 
 export const VOICES = [

@@ -118,3 +118,50 @@ export function variantChordName(keyPc, degreeIndex, variantId) {
   const variant = VARIANTS[variantId] || VARIANTS[NEUTRAL_VARIANT];
   return chordRootName(keyPc, degreeIndex) + variant.suffix(degree.quality);
 }
+
+/**
+ * Rotate a chord's semitone offsets (ascending, root-first, as VARIANTS'
+ * `offsets` produce) into a given inversion: the bottom `inversionIndex`
+ * notes move up an octave, in that order. `inversionIndex` isn't expected
+ * to already be in range -- it's wrapped here, mod the *current* offsets
+ * length -- so a raw, ever-incrementing counter (input.js cycles one this
+ * way per chord button, see its "/" handling) always lands on a valid
+ * voicing of whatever chord shape is currently in play, even right after a
+ * variant change altered its note count. That's what keeps an inversion
+ * from jumping oddly the moment a modifier changes the chord under it: the
+ * rotation is expressed structurally (how many of the current notes to
+ * lift), never as a fixed absolute voicing baked in before the modifier.
+ */
+export function invertOffsets(offsets, inversionIndex) {
+  const n = offsets.length;
+  const k = ((inversionIndex % n) + n) % n;
+  return offsets.slice(k).concat(offsets.slice(0, k).map((o) => o + 12));
+}
+
+/** Chord-symbol suffix for an inversion, e.g. "/1i" for the 1st inversion; '' for root position. */
+export function inversionSuffix(inversionIndex, noteCount) {
+  const k = ((inversionIndex % noteCount) + noteCount) % noteCount;
+  return k > 0 ? `/${k}i` : '';
+}
+
+/** Chord-symbol suffix for an octave shift, e.g. "+1", "-2"; '' when unshifted. */
+export function octaveSuffix(octaveShift) {
+  if (!octaveShift) return '';
+  return octaveShift > 0 ? `+${octaveShift}` : `${octaveShift}`;
+}
+
+/**
+ * Full chord-button display name including inversion/octave state, e.g.
+ * "Am/1i+1" -- variantChordName's root+quality/variant suffix, then
+ * inversion, then octave, matching the order the README describes them in.
+ */
+export function chordDisplayName(keyPc, degreeIndex, variantId, { inversionIndex = 0, octaveShift = 0 } = {}) {
+  const degree = DEGREES[degreeIndex];
+  const variant = VARIANTS[variantId] || VARIANTS[NEUTRAL_VARIANT];
+  const noteCount = variant.offsets(degree.quality).length;
+  return (
+    variantChordName(keyPc, degreeIndex, variantId) +
+    inversionSuffix(inversionIndex, noteCount) +
+    octaveSuffix(octaveShift)
+  );
+}
