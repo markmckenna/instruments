@@ -5,7 +5,7 @@
 PORT ?= 4173
 URL := http://localhost:$(PORT)
 
-.PHONY: help run open stop test-host-start test-host-stop check
+.PHONY: help run open stop browsers test-host-start test-host-stop check
 
 help: ## List available commands
 	@echo "hichord -- available commands:"
@@ -27,8 +27,20 @@ stop: ## Kill a server left running from a backgrounded 'make run'
 
 node_modules: package.json
 	@npm install
-	@npx playwright install firefox
 	@touch node_modules
+
+# Downloads the actual Firefox binary Playwright drives -- kept out of the
+# node_modules recipe above so `make check` never needs it just to install
+# npm packages: it may instead connect to an already-running browser-server
+# via PW_TEST_CONNECT_WS_ENDPOINT (see tools/check.sh), in which case no
+# local browser is needed at all. Only test-host-start actually launches a
+# real local browser, and that's meant to run in your own unsandboxed shell
+# anyway (see "Running under a sandboxed agent" in tests/README.md) --
+# `npx playwright install` needs to write to a global cache outside the repo
+# (~/Library/Caches/ms-playwright on macOS), which a sandboxed agent session
+# generally can't.
+browsers: node_modules
+	@npx playwright install firefox
 
 # Browser server: a persistent, out-of-process browser that `make check`/
 # `npx playwright test` connects to (via PW_TEST_CONNECT_WS_ENDPOINT) instead
@@ -39,7 +51,7 @@ node_modules: package.json
 # by *your* shell, not a sandboxed one.
 BROWSER_SERVER_PORT ?= 4175
 
-test-host-start: node_modules ## Start the Playwright browser server (see comment above)
+test-host-start: browsers ## Start the Playwright browser server (see comment above)
 	@BROWSER_SERVER_PORT=$(BROWSER_SERVER_PORT) bash tools/browser-server.sh start
 
 test-host-stop: ## Stop the Playwright browser server
