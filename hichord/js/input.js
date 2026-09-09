@@ -12,8 +12,10 @@ export const engine = new AudioEngine();
 // Shared by the loop recorder (loop-length rounding, note quantizing) and
 // the metronome click (beat timing) -- see tempo.js.
 export const tempo = new Tempo();
-export const recorder = new LoopRecorder(engine, tempo);
 export const metronome = new Metronome(engine, tempo);
+// Takes metronome too, so it can phase-lock loop playback to a running
+// click instead of an arbitrary real moment -- see loop.js's _startScheduler().
+export const recorder = new LoopRecorder(engine, tempo, metronome);
 
 const state = {
   keyIndex: 0, // index into CIRCLE_OF_FIFTHS

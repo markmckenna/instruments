@@ -43,6 +43,18 @@ export class Metronome {
     }
   }
 
+  /**
+   * The click's own beat-grid time nearest to `ctxTime`. Lets another
+   * scheduler (LoopRecorder, when starting playback) phase-align its own
+   * start to the click instead of anchoring to an arbitrary real moment
+   * (whenever a key happened to be released) that drifts independently of
+   * it -- see DECISIONS.md "Loop playback phase-locks to a running click".
+   */
+  nearestBeatTime(ctxTime) {
+    const beatsSinceStart = (ctxTime - this._startCtxTime) / this.tempo.beatSeconds;
+    return this._startCtxTime + Math.round(beatsSinceStart) * this.tempo.beatSeconds;
+  }
+
   _tick() {
     const ctxNow = this.engine.ctx.currentTime;
     const horizon = ctxNow + LOOKAHEAD - this._startCtxTime;

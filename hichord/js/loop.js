@@ -9,9 +9,10 @@ const LOOKAHEAD = 0.1; // seconds
 const TICK_MS = 25;
 
 export class LoopRecorder {
-  constructor(engine, tempo) {
+  constructor(engine, tempo, metronome) {
     this.engine = engine;
     this.tempo = tempo;
+    this.metronome = metronome;
     this.state = 'idle'; // 'idle' | 'recording' | 'playing'
     this.events = []; // { t: secondsFromLoopStart, type: 'on' | 'off', notes }
     this.loopLength = 0;
@@ -36,20 +37,22 @@ export class LoopRecorder {
     const raw = this.engine.ctx.currentTime - this._recordStart;
     // Quantize to the shared Tempo's grid (default: nearest 32nd note) --
     // "just on loops": this only ever touches what gets *recorded*, so live
-    // play is never snapped, only what a loop plays back.
-    const t = this.tempo.quantize(raw);
-    const last = this.events[this.events.length - 1];
-    // If quantizing collapses this event onto the exact same instant as the
-    // one just recorded (playing faster than the quantize grid resolves),
-    // replace it rather than stacking both: refreshSound() always records
-    // the *complete* current sound, not a delta, so the latest event alone
-    // already reflects everything that happened at that instant. Without
-    // this, replaying two same-`when` events back to back (see loop.js's
-    // scheduler) would fire an attack immediately cancelled by a release
-    // immediately followed by another attack -- audible as a garbled flurry
-    // instead of just the actual end state at that moment.
-    if (last && last.t === t) this.events[this.events.length - 1] = { t, type, notes };
-    else this.events.push({ t, type, notes });
+    // play is never snapped, only what a loop plays back. Two events can
+    // legitimately land on the same quantized instant (playing faster than
+    // the grid resolves, or a coarse grid, e.g. 1/4) -- a prior version
+    // "coalesced" those by replacing the earlier one, on the theory that a
+    // same-instant attack-then-release is inaudible anyway (see
+    // AudioEngine._envelopeValueAt: it evaluates to exactly 0 right at its
+    // own attackStart, so the cancelled attack was never actually silent
+    // *incorrectly*, just silent). But collapsing through an *intermediate*
+    // 'off' this way could erase an entire chord that really was played --
+    // on(A), off, on(B) all landing on one instant coalesced down to just
+    // on(B), silently dropping A from the recording, worse at coarser grids
+    // where collisions are common. Simplest correct fix: keep every event.
+    // A same-instant attack+release pair is harmless (mathematically
+    // silent, just a couple of wasted oscillator nodes), which is a far
+    // smaller cost than ever losing a note outright.
+    this.events.push({ t: this.tempo.quantize(raw), type, notes });
   }
 
   stopRecording() {
@@ -120,7 +123,18 @@ export class LoopRecorder {
       this.state = 'idle';
       return;
     }
-    this._loopStartCtxTime = this.engine.ctx.currentTime;
+    const now = this.engine.ctx.currentTime;
+    // If the click is running, phase-lock playback to *its* beat grid
+    // instead of anchoring to this exact real moment (whenever the record
+    // key happened to be released). loopLength is always a whole number of
+    // beats (see stopRecording), so once this one anchor point lands on the
+    // click's grid, every later iteration (an integer number of beats
+    // further on) automatically stays on it too -- otherwise the loop's own
+    // phase is essentially random relative to the click, and drifts further
+    // out of sync with it the longer you played before releasing, even
+    // though the click and the loop's *internal* timing were each correct
+    // on their own.
+    this._loopStartCtxTime = this.metronome.enabled ? this.metronome.nearestBeatTime(now) : now;
     this._iteration = 0;
     this._nextEventIndex = 0;
     this._timer = setInterval(() => this._tick(), TICK_MS);

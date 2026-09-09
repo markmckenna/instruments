@@ -289,28 +289,42 @@ they are below.
   durations themselves relate) and keeps the control to two buttons.
   Bounded to 1 (whole note) through 1/128, past which either end stops being
   a useful grid.
-- **Same-instant events after quantizing are coalesced, not stacked**:
-  playing faster than the quantize grid resolves (or a coarse enough grid)
-  can quantize two different real moments onto the exact same timestamp.
-  `recordEvent()` replaces the previous event outright when this happens
-  rather than appending both, since `refreshSound()` always records the
-  *complete* current sound rather than a delta — the newer event alone
-  already captures everything that mattered at that instant. Without this,
-  replaying two same-`when` events back to back (`_tick()` fires them in
-  order within a single pass, see Loop recorder above) would attack a note
-  only to have it immediately cancelled by a release, immediately followed
-  by another attack — audible as a garbled flurry instead of the actual end
-  state at that moment.
+- **Same-instant events after quantizing are *not* coalesced — tried once,
+  reverted**: playing faster than the quantize grid resolves (or a coarse
+  grid, e.g. 1/4) can quantize two different real moments onto the exact
+  same timestamp. A version of `recordEvent()` used to replace the previous
+  event outright when this happened, on the theory that a same-instant
+  attack-then-release is inaudible anyway (`AudioEngine._envelopeValueAt`
+  evaluates to exactly 0 right at a note's own `attackStart`, so the
+  cancelled attack was never incorrectly silent, just silent). That's true,
+  but collapsing through an *intermediate* `'off'` this way could erase an
+  entire chord that really was played — `on(A)`, `off`, `on(B)` all landing
+  on one instant coalesced down to just `on(B)`, silently dropping A,
+  worse at coarser grids where collisions are common (reported as "loop
+  record at 1/4 doesn't work at all"). Reverted: every event is kept, and a
+  same-instant attack+release pair is left as the harmless silent no-op it
+  already was, which is a far smaller cost than ever losing a note outright.
+- **Loop playback phase-locks to a running click**: `_startScheduler()`
+  anchors the loop's first iteration to `Metronome.nearestBeatTime()` when
+  the click is enabled, instead of to the exact real moment the record key
+  happened to be released. `loopLength` is always a whole number of beats
+  (see above), so once *one* anchor point lands on the click's beat grid,
+  every later iteration (an integer number of beats further on) stays on it
+  automatically. Without this, the loop's phase relative to the click was
+  essentially random — its own internal timing could be perfectly
+  quantized and the click perfectly steady, and the loop would still drift
+  further out of sync with the click the longer a recording ran before
+  being stopped, since nothing tied the two together (reported as "the
+  recording ends up being out of sync... depends on when I release the
+  record button" — exactly right). Only the loop conforms to the click,
+  not the other way around: the click still runs free (see below) whether
+  or not anything is being recorded or looped, which is what makes it
+  useful as a tempo reference *before* you've recorded anything to lock to.
 - **The click is a free-running practice metronome, independent of loop
   record/playback state**: `Metronome` starts counting beats from whenever
   it's turned on and keeps clicking regardless of whether you're recording,
   looping, or doing neither — the point is to give you a tempo reference
   *before* and *while* you play, not only to mark time during playback.
-  It intentionally does not try to phase-lock to `LoopRecorder`'s own loop
-  boundary; that would need the two schedulers to coordinate for a benefit
-  (staying in the same phase as a loop you may not even have recorded yet)
-  that doesn't clearly outweigh the simplicity of two independent, freely
-  startable/stoppable schedulers.
 - Same "look a little ahead on a short interval, then let the real audio
   clock trigger it" lookahead pattern as the loop scheduler (see Loop
   recorder above) — kept as its own small scheduler in `metronome.js` rather

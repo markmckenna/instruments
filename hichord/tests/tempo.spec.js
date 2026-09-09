@@ -4,6 +4,7 @@
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
 import { Tempo } from '../js/tempo.js';
+import { chordMidiNotes } from './support/expected-audio.js';
 
 test.describe('Tempo (pure logic, no browser/audio needed)', () => {
   test('bpm is clamped to the 40-240 range', () => {
@@ -88,14 +89,18 @@ test('recorded loop events snap to the quantize grid, live play is never touched
   await page.click('[data-action="clear-loop"]');
 });
 
-test('rapid chord changes faster than the quantize grid coalesce instead of stacking a same-instant flurry', async ({
+test('rapid chord changes at a coarse quantize grid record every chord, none silently dropped', async ({
   page,
 }) => {
-  // Faster than the default 1/32 grid step (62.5ms at 120bpm) -- without
-  // coalescing, quantizing would collapse several of these onto the same
-  // timestamp, and replaying them all at once would attack a note only to
-  // immediately cancel it with a release, immediately followed by another
-  // attack: a garbled flurry rather than the actual end state.
+  // Coarsen to 1/4 -- collisions onto the same quantized instant are common
+  // here, which is exactly where a prior "coalesce same-instant events" fix
+  // (since reverted, see DECISIONS.md) could silently erase a chord that
+  // was genuinely played by replacing it with whatever came right after.
+  await page.click('[data-action="quantize-down"]');
+  await page.click('[data-action="quantize-down"]');
+  await page.click('[data-action="quantize-down"]');
+  await expect(page.locator('[data-display="quantize"]')).toHaveText('1/4');
+
   await holdKey(page, 'Space');
   await holdKey(page, 'j');
   await page.waitForTimeout(20);
@@ -112,14 +117,46 @@ test('rapid chord changes faster than the quantize grid coalesce instead of stac
     const mod = await import('/js/input.js');
     return mod.recorder.events;
   });
-  // No two *consecutive* recorded events may share a timestamp -- each
-  // quantized instant is represented exactly once, by whatever the actual
-  // sound was at that instant.
-  for (let i = 1; i < events.length; i++) {
-    expect(events[i].t).not.toBe(events[i - 1].t);
-  }
+  const recordedNotes = new Set(events.flatMap((e) => e.notes || []));
+  const played = [
+    ...chordMidiNotes(0, 0, 'KeyS'), // J
+    ...chordMidiNotes(0, 3, 'KeyS'), // O
+    ...chordMidiNotes(0, 5, 'KeyS'), // P
+  ];
+  for (const note of played) expect(recordedNotes.has(note)).toBe(true);
 
   await page.click('[data-action="clear-loop"]');
+});
+
+test('loop playback phase-locks to a running click, not to whenever the record key was released', async ({
+  page,
+}) => {
+  await page.click('[data-action="click-toggle"]');
+  await page.waitForTimeout(130); // let the click's own phase get going
+
+  await holdKey(page, 'Space');
+  await holdKey(page, 'j');
+  await page.waitForTimeout(370); // a deliberately not-on-a-beat hold duration
+  await releaseKey(page, 'Space');
+  await releaseKey(page, 'j');
+
+  const { loopStart, clickStart, beatSeconds } = await page.evaluate(async () => {
+    const mod = await import('/js/input.js');
+    return {
+      loopStart: mod.recorder._loopStartCtxTime,
+      clickStart: mod.metronome._startCtxTime,
+      beatSeconds: mod.tempo.beatSeconds,
+    };
+  });
+  const beatsSinceClickStart = (loopStart - clickStart) / beatSeconds;
+  // Should land on a whole beat relative to the click's own phase -- not an
+  // arbitrary offset from whenever Space happened to be released, which is
+  // what let a loop's repeat drift out of sync with an ongoing click the
+  // longer a recording ran before being stopped.
+  expect(beatsSinceClickStart).toBeCloseTo(Math.round(beatsSinceClickStart), 5);
+
+  await page.click('[data-action="clear-loop"]');
+  await page.click('[data-action="click-toggle"]');
 });
 
 test('the metronome click plays a steady click on every beat while enabled', async ({ page }) => {
