@@ -1,9 +1,8 @@
-// Loop recorder: hold Space to record, release to snap the loop length to
-// the nearest beat (at the shared Tempo's bpm, see tempo.js) and start
-// looping it. Uses a standard Web-Audio lookahead scheduler (short
-// setInterval that schedules anything due in the next LOOKAHEAD seconds)
-// rather than relying on setTimeout/setInterval timing directly, so
-// playback stays tight even under UI jank.
+// Loop recorder: records events while active, then plays them back on
+// repeat. Uses a Web-Audio lookahead scheduler (short setInterval that
+// schedules anything due in the next LOOKAHEAD seconds) rather than relying
+// on setTimeout/setInterval timing directly, so playback stays tight even
+// under UI jank.
 
 const LOOKAHEAD = 0.1; // seconds
 const TICK_MS = 25;
@@ -16,7 +15,7 @@ export class LoopRecorder {
     this.state = 'idle'; // 'idle' | 'recording' | 'playing'
     this.events = []; // { t: secondsFromLoopStart, type: 'on' | 'off', notes }
     this.loopLength = 0;
-    this.voice = null; // the engine voice preset in effect when this recording was made -- see startRecording()
+    this.voice = null; // engine voice preset in effect when this recording was made
     this._recordStart = 0;
     this._timer = null;
     this._loopStartCtxTime = 0;
@@ -26,37 +25,26 @@ export class LoopRecorder {
 
   startRecording() {
     this._stopScheduler();
-    this.engine.unlock(); // ensures ctx exists even if nothing has sounded yet (see AudioEngine.unlock)
-    this.engine.stopChord('loop', undefined, this.voice); // don't leave whatever the old loop last triggered ringing forever, released in *its* voice
+    this.engine.unlock();
+    this.engine.stopChord('loop', undefined, this.voice); // don't leave the old loop's last chord ringing forever, released in *its* voice
     this.events = [];
     this.state = 'recording';
     this._recordStart = this.engine.ctx.currentTime;
-    // Pin this recording to whatever voice is selected right now, so cycling
-    // voices later (while this loop plays, or before the next one) reshapes
-    // only live playing -- the loop keeps sounding the way it was recorded.
-    this.voice = this.engine.voice;
+    this.voice = this.engine.voice; // pin to what's selected now -- cycling voices later reshapes only live playing, not this loop
   }
 
   recordEvent(type, notes) {
     if (this.state !== 'recording') return;
-    // `notes` is always the *complete* set sounding at this instant (input.js's
-    // refreshSound() passes currentSound()'s full merged list), not a delta --
-    // so on playback, each event can go through the same playChord()
-    // reconciliation live play does (see audio.js), and a pitch shared between
+    // `notes` is always the *complete* set sounding at this instant, not a
+    // delta, so playback can run each event through the same playChord()
+    // reconciliation live play does (see audio.js) -- a pitch shared between
     // one event and the next just keeps sounding across them instead of
-    // retriggering. Playback reproduces live play's per-note independence
-    // rather than approximating it.
+    // retriggering.
     const raw = this.engine.ctx.currentTime - this._recordStart;
-    // Quantize to the shared Tempo's grid (default: nearest 32nd note) --
-    // "just on loops": this only ever touches what gets *recorded*, so live
-    // play is never snapped, only what a loop plays back. Two events can
-    // legitimately land on the same quantized instant (playing faster than
-    // the grid resolves, or a coarse grid, e.g. 1/4); keep every event
-    // rather than collapsing same-instant collisions, since collapsing
-    // through an intermediate 'off' can erase a chord that really was
-    // played (on(A), off, on(B) -> just on(B)). A same-instant attack+
-    // release pair is harmless (mathematically silent), which is a far
-    // smaller cost than ever losing a note outright.
+    // Two events can legitimately land on the same quantized instant; keep
+    // both rather than collapsing the collision, since collapsing through an
+    // intermediate 'off' could erase a chord that really was played
+    // (on(A), off, on(B) -> just on(B)).
     this.events.push({ t: this.tempo.quantize(raw), type, notes });
   }
 
@@ -67,29 +55,20 @@ export class LoopRecorder {
       return;
     }
     const rawLength = this.engine.ctx.currentTime - this._recordStart;
-    // Snap to the *nearest* beat, even if that rounds shorter than what was
-    // actually played. Rounding up unconditionally would tack on up to
-    // almost a full beat of dead air at the loop's tail on every recording,
-    // and since that overshoot is *the loop length itself*, it compounds on
-    // every repeat -- the loop would drift further behind an external tempo
-    // the longer it played. Rounding down instead just clips whatever's
-    // still sounding at the boundary a little early (at most a quarter
-    // beat) -- generally well after its attack/decay has settled into a
-    // steady sustain by then, so it's inaudible.
+    // Snap to the *nearest* beat (the shared Tempo's bpm, see tempo.js), not
+    // always up: rounding up would tack on up to a beat of dead air at the
+    // tail on every recording, and since that overshoot is the loop length
+    // itself, it'd compound on every repeat. Rounding down instead just clips
+    // whatever's still sounding at the boundary a little early, generally
+    // inaudible by then.
     const beats = Math.max(1, Math.round(rawLength / this.tempo.beatSeconds));
     this.loopLength = beats * this.tempo.beatSeconds;
-    // No event may land beyond the loop it's meant to play within, or it
-    // (and the next iteration's events) would fire out of order. Clamp
-    // first, then decide below (using the now-clamped last event) whether a
-    // synthetic release is still needed.
+    // Clamp any event past the (now-rounded) loop length, or it -- and the
+    // next iteration's events -- would fire out of order.
     this.events = this.events.map((ev) => (ev.t > this.loopLength ? { ...ev, t: this.loopLength } : ev));
-    // If recording stopped while a chord was still held, its 'on' event has
-    // no matching 'off' -- without this, every loop iteration would fire
-    // that same 'on' again while its notes are already sounding from the
-    // previous iteration (playChord() leaves already-sounding notes alone,
-    // see audio.js), so they'd never actually get released -- one continuous
-    // note rather than a loop. Force a release right at the loop boundary so
-    // playback always cleanly cuts the note before repeating.
+    // A chord still held when recording stopped has no matching 'off'; force
+    // one at the loop boundary so playback cuts it cleanly before repeating
+    // instead of holding it continuously.
     if (this.events[this.events.length - 1].type === 'on') {
       this.events.push({ t: this.loopLength, type: 'off', notes: null });
     }
@@ -100,13 +79,13 @@ export class LoopRecorder {
   /** Stop looping playback (keeps the recorded events, use clear() to drop them). */
   stopPlaying() {
     this._stopScheduler();
-    this.engine.stopChord('loop', undefined, this.voice); // see startRecording() above
+    this.engine.stopChord('loop', undefined, this.voice);
     if (this.state === 'playing') this.state = 'idle';
   }
 
   clear() {
     this._stopScheduler();
-    this.engine.stopChord('loop', undefined, this.voice); // see startRecording() above
+    this.engine.stopChord('loop', undefined, this.voice);
     this.state = 'idle';
     this.events = [];
     this.loopLength = 0;
@@ -125,16 +104,8 @@ export class LoopRecorder {
       return;
     }
     const now = this.engine.ctx.currentTime;
-    // If the click is running, phase-lock playback to *its* beat grid
-    // instead of anchoring to this exact real moment (whenever the record
-    // key happened to be released). loopLength is always a whole number of
-    // beats (see stopRecording), so once this one anchor point lands on the
-    // click's grid, every later iteration (an integer number of beats
-    // further on) automatically stays on it too -- otherwise the loop's own
-    // phase is essentially random relative to the click, and drifts further
-    // out of sync with it the longer you played before releasing, even
-    // though the click and the loop's *internal* timing were each correct
-    // on their own.
+    // If the click is on, beat-match playback to its grid; otherwise
+    // beat-match to right now.
     this._loopStartCtxTime = this.metronome.enabled ? this.metronome.nearestBeatTime(now) : now;
     this._iteration = 0;
     this._nextEventIndex = 0;
@@ -166,13 +137,9 @@ export class LoopRecorder {
   }
 
   // Schedules straight onto the audio clock via AudioEngine's `when` param
-  // (osc.start(when), gain ramps from `when`) rather than deferring the call
-  // itself with setTimeout: setTimeout's fire time is only as precise as the
-  // JS event loop, which routinely lands tens of milliseconds late under any
-  // contention, and that lateness would land directly on every note's actual
-  // start/stop time -- audible as loop playback that drifts behind tempo.
-  // Scheduling ahead (within LOOKAHEAD) and letting Web Audio's own clock
-  // trigger the note is what "the standard lookahead pattern" actually means.
+  // rather than deferring the call itself with setTimeout, whose fire time
+  // is only as precise as the JS event loop -- that lateness would land
+  // directly on the note's actual start/stop time, audible as drift.
   _fireEvent(ev, when) {
     if (ev.type === 'on') this.engine.playChord('loop', ev.notes, when, this.voice);
     else this.engine.stopChord('loop', when, this.voice);
