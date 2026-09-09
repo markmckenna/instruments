@@ -25,19 +25,34 @@ Or standalone: `npm ci && npx playwright install firefox && npx playwright test`
 
 ### Running under a sandboxed agent
 
-A sandboxed agent session (e.g. Claude Code's Bash sandbox) generally can't
-run this suite directly: spawning a real browser needs OS privileges
-(macOS Mach IPC for inter-process handoff, notably) that such a sandbox
-denies to a process it spawned itself, regardless of browser engine.
+Firefox itself (unlike Chromium -- see `../playwright.config.js`'s own
+comment on why Firefox is the browser used here) launches fine from inside a
+sandboxed agent session once it's actually installed. The part sandboxed
+agent sessions generally can't do is *install* it: `npx playwright install`
+needs to write to a global, outside-the-repo cache
+(`~/Library/Caches/ms-playwright` on macOS), which such a sandbox denies.
+That's why `make check`'s `node_modules` prerequisite only runs `npm
+install` (no browser download) -- see `../Makefile`'s `browsers` target,
+kept separate for exactly this reason.
 
-The fix is to not spawn the browser from inside the sandbox at all: run
-`make test-host-start` yourself, in a plain local shell, once per session --
-it starts `playwright run-server` in the background (see `../Makefile`
-"Browser server" and `../tools/browser-server.sh`), so the actual browser
-process is a child of *your* shell, not the sandboxed one. `make check`
-picks it up automatically if it's running (falling back to launching its
-own browser otherwise), so nothing else changes. `make test-host-stop` when
-done.
+So: if Firefox has ever been installed for this repo before (by you, or by
+an earlier non-sandboxed `make check`/`make test-host-start`/`make browsers`
+run), a sandboxed agent's `make check` should just work, no extra step
+needed. If it hasn't yet, run `make browsers` (or `make test-host-start`,
+which depends on it) yourself once, in a plain local shell -- after that,
+sandboxed runs work directly. `tools/check.sh` also tells the two failure
+modes apart on its own (no browser reachable at all, vs. an actual failing
+test), so a failing `make check` names which one it hit without needing to
+re-diagnose it by hand.
+
+A `make test-host-start` server (a `playwright run-server` your own shell
+spawns, so the browser process is a child of it rather than the sandboxed
+one -- see `../Makefile` "Browser server" and `../tools/browser-server.sh`)
+is still worth using if you want the browser to persist and be reused across
+many sandboxed `make check` runs without each one launching its own; `make
+check` picks it up automatically via `PW_TEST_CONNECT_WS_ENDPOINT` if it's
+running, falling back to a locally-launched Firefox otherwise. `make
+test-host-stop` when done.
 
 ## How they work
 
@@ -85,7 +100,12 @@ done.
   actual sounding notes.
 - `loop.spec.js` -- record/release starts real looping playback on the real
   clock, live play mixes with it, tapping `Space` alone actually stops the
-  scheduler.
+  scheduler; a note following a long silent stretch still gets its full
+  attack on every repeat (regression coverage for a late/no-attack bug).
+- `bass.spec.js` -- the bass toggle (button and `B` key) layers an extra
+  low root under a held chord, fixed to octave 2 regardless of octave
+  shift, and never gets swept into an arpeggiated pattern -- it sustains
+  on its own voice/track through both live play and loop playback.
 - `octave.spec.js` -- the three effects of `[`/`]` (shift a sounding chord,
   silently target a chord while held first, shift the global register when
   no chord's involved), applying to every held chord at once, and the
@@ -97,12 +117,14 @@ done.
   chord, a locked chord keeps sounding shaped by it once released, and a
   physically-held variant still overrides a lock live.
 - `playback-modes.spec.js` -- backtick/the mode-cycle button cycles Chord/
-  Bass/Arpeggio/Lead; each mode's note-set or timing, and that a mode
-  switch never rewrites an already-recorded loop.
+  Arpeggio/Lead; each mode's note-set or timing (including the root doubled
+  an octave up by default), Lead mode greying out and ignoring the variant
+  grid, and that a mode switch never rewrites an already-recorded loop.
 - `tempo.spec.js` -- bpm/quantize controls and their `+`/`-`/`{`/`}`
-  keyboard shortcuts, their effect on recorded timing, quantize's
+  keyboard shortcuts (including `+`/`-`'s typematic hold-repeat and typing a
+  bpm directly into the field), their effect on recorded timing, quantize's
   grid-collision edge case, loop playback phase-locking to a running click,
-  the metronome click itself.
+  the metronome click itself and its tap-tempo cue (four taps in a row).
 - `keyboard-and-safety.spec.js` -- OS key-repeat is ignored, and the
   blur/visibilitychange "panic" safety valve releases a held chord.
 

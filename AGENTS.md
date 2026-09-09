@@ -84,12 +84,14 @@ note it in `PROCESS.md` and as a comment in the promoted code itself.
 - Each instrument's own `Makefile` supports `make run` standalone (so
   `cd hichord && make run` and `make hichord` from the root do the same
   thing).
-- An instrument with browser-based tests can't run them from inside a
-  sandboxed agent session (spawning a real browser needs OS privileges such
-  a sandbox denies) -- ask the person running the session to start that
-  instrument's browser-server target themselves first. See hichord's
-  `tests/README.md` ("Running under a sandboxed agent") for the pattern to
-  reuse in a future instrument.
+- An instrument with browser-based tests may not be able to run them from
+  inside a sandboxed agent session the first time, depending on the browser
+  engine and whether it's already installed -- see hichord's
+  `tests/README.md` ("Running under a sandboxed agent") for the actual
+  constraint and the pattern to reuse in a future instrument. Its
+  `tools/check.sh` also tells apart "no browser was reachable at all" from
+  a genuine test failure in its own output, so that distinction doesn't need
+  rediscovering by hand each time.
 - An instrument with automated validations supports `make check` standalone
   (not `test` -- `check` is the standard name for "run all automated
   validations"), and the root `make check` runs every instrument's (skip
