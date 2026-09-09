@@ -9,6 +9,7 @@ import { AudioEngine, buildChord } from './audio.js';
 import { LoopRecorder } from './loop.js';
 import { Metronome } from './metronome.js';
 import { Tempo } from './tempo.js';
+import { Arpeggiator } from './arpeggiator.js';
 import { renderUI } from './ui.js';
 
 // The 7 chord buttons, in the physical left-to-right order given in the
@@ -43,6 +44,20 @@ export const VARIANT_GRID = [
   ['KeyZ', 'KeyX', 'KeyC'],
 ];
 
+// The two octave-shift keys and the delta each applies -- see the "Octave
+// shift" section below for the three different things pressing one can do.
+const OCTAVE_KEYS = { BracketLeft: -1, BracketRight: 1 };
+// Bounds a shift can reasonably reach before it stops being a useful register
+// (global and per-key shifts are clamped independently, so a key already
+// pushed to an extreme can still be pulled back the other way by the global
+// register moving opposite it).
+const OCTAVE_MIN = -3;
+const OCTAVE_MAX = 3;
+
+// Playback modes (Backquote cycles these -- see "Playback mode" below).
+// 'chord' is the original, only behavior; the rest are additive.
+const MODES = ['chord', 'bass', 'arpeggio', 'lead'];
+
 export const engine = new AudioEngine();
 // Shared by the loop recorder (loop-length rounding, note quantizing) and
 // the metronome click (beat timing) -- see tempo.js.
@@ -51,9 +66,12 @@ export const metronome = new Metronome(engine, tempo);
 // Takes metronome too, so it can phase-lock loop playback to a running
 // click instead of an arbitrary real moment -- see loop.js's _startScheduler().
 export const recorder = new LoopRecorder(engine, tempo, metronome);
+const arpeggiator = new Arpeggiator(engine, tempo, recorder);
 
 const state = {
   keyIndex: 0, // index into CIRCLE_OF_FIFTHS
+  modeIndex: 0, // index into MODES
+  globalOctaveShift: 0, // whole octaves, applies on top of every key's own shift below
 };
 
 // Chord buttons are polyphonic: any number can be held at once and all sound
@@ -66,24 +84,49 @@ const state = {
 let heldBases = [];
 let heldVariantStack = [];
 
+// Per-chord-key state -- keyed by the same `code` CHORD_KEYS/heldBases use.
+// Each persists independently of whether that key is currently held, like a
+// setting on the button itself, until something changes it again.
+let keyOctaveShift = {}; // code -> whole octaves (default 0)
+let keyInversion = {}; // code -> raw, ever-incrementing counter (see theory.js's invertOffsets for why raw)
+let lockedModifier = {}; // code -> a VARIANTS id, or absent for no lock
+
+// Octave-shift-key hold tracking -- see "Octave shift" below.
+let heldOctaveKeys = []; // codes currently held (BracketLeft/BracketRight)
+let octaveKeyTargetedChord = {}; // code -> true once this hold has already shifted a chord (live or silently), so its own release doesn't *also* shift the global register
+let pendingOctaveTargets = new Set(); // base codes pressed while an octave key is held: suppressed from sounding until released (see pressBase)
+
 const BASE_CODES = new Set(CHORD_KEYS.map((k) => k.code));
 const VARIANT_CODES = new Set(Object.keys(VARIANT_KEYS));
 
-// Combines every currently-held chord button into one sound: all of them are
-// built with whatever variant is currently held (there's only one variant
-// control, so it shapes all held chords uniformly) and their notes merged
-// into a single deduped list. Holding just one button behaves exactly as
-// before; holding several overlays them into one richer chord.
+function clampOctave(v) {
+  return Math.min(OCTAVE_MAX, Math.max(OCTAVE_MIN, v));
+}
+
+// Combines every currently-*sounding* chord button (i.e. held but not
+// currently a silent octave-adjust target, see pressBase) into one sound.
+// Unlike before, each key resolves its own variant/octave/inversion rather
+// than sharing one uniform variant -- a chord-lock (see toggleLock) can now
+// give different held keys different shapes at once, and a physically-held
+// variant still overrides every key's shape live, lock or no lock, same
+// precedence the joystick already had over everything else.
 function currentSound() {
-  if (heldBases.length === 0) return null;
+  const mode = MODES[state.modeIndex];
   const heldVariantCode = heldVariantStack[heldVariantStack.length - 1];
-  const variantId = heldVariantCode ? VARIANT_KEYS[heldVariantCode] : NEUTRAL_VARIANT;
-  const degreeIndices = heldBases.map((code) => CHORD_KEYS.findIndex((k) => k.code === code));
+  const physicalVariantId = heldVariantCode ? VARIANT_KEYS[heldVariantCode] : null;
+  const soundingBases = heldBases.filter((code) => !pendingOctaveTargets.has(code));
+  if (soundingBases.length === 0) return null;
   const noteSet = new Set();
-  degreeIndices.forEach((degreeIndex) => {
-    buildChord(CIRCLE_OF_FIFTHS[state.keyIndex].pc, degreeIndex, variantId).forEach((n) => noteSet.add(n));
+  soundingBases.forEach((code) => {
+    const degreeIndex = CHORD_KEYS.findIndex((k) => k.code === code);
+    const variantId = physicalVariantId || lockedModifier[code] || NEUTRAL_VARIANT;
+    const octaveShift = clampOctave(state.globalOctaveShift + (keyOctaveShift[code] || 0));
+    const inversionIndex = keyInversion[code] || 0;
+    buildChord(CIRCLE_OF_FIFTHS[state.keyIndex].pc, degreeIndex, variantId, { octaveShift, inversionIndex, mode }).forEach(
+      (n) => noteSet.add(n),
+    );
   });
-  return { notes: Array.from(noteSet).sort((a, b) => a - b), degreeIndices, variantId };
+  return { notes: Array.from(noteSet).sort((a, b) => a - b) };
 }
 
 // Live playing and loop playback are independent engine voices ('live' and
@@ -92,12 +135,19 @@ function currentSound() {
 // loop's sound.
 function refreshSound() {
   const sound = currentSound();
-  if (sound) {
-    engine.playChord('live', sound.notes);
-    recorder.recordEvent('on', sound.notes);
+  if (MODES[state.modeIndex] === 'arpeggio' && sound) {
+    // Delegate entirely to the arpeggiator -- it drives engine.playChord and
+    // recorder.recordEvent itself, one note at a time, on its own schedule.
+    arpeggiator.start(() => currentSound()?.notes || []);
   } else {
-    engine.stopChord('live');
-    recorder.recordEvent('off', null);
+    arpeggiator.stop();
+    if (sound) {
+      engine.playChord('live', sound.notes);
+      recorder.recordEvent('on', sound.notes);
+    } else {
+      engine.stopChord('live');
+      recorder.recordEvent('off', null);
+    }
   }
   updateUI();
 }
@@ -107,8 +157,15 @@ export function updateUI() {
   renderUI({
     key: CIRCLE_OF_FIFTHS[state.keyIndex],
     voice: engine.voice,
-    heldBases,
+    mode: MODES[state.modeIndex],
+    heldBases, // all physically-held codes (incl. silent octave targets), for the variant-grid relabeling
+    soundingBases: heldBases.filter((code) => !pendingOctaveTargets.has(code)),
+    pendingBases: Array.from(pendingOctaveTargets),
     heldVariant: heldVariantStack[heldVariantStack.length - 1] || null,
+    lockedModifier,
+    keyOctaveShift,
+    keyInversion,
+    globalOctaveShift: state.globalOctaveShift,
     loopState: recorder.state,
     bpm: tempo.bpm,
     quantizeDivision: tempo.quantizeDivision,
@@ -120,13 +177,31 @@ export function updateUI() {
 function pressBase(code) {
   if (heldBases.includes(code)) return; // ignore key-repeat / duplicate pointer
   heldBases.push(code);
-  refreshSound();
+  if (heldOctaveKeys.length) {
+    // An octave-shift key is already held: this press targets `code` for a
+    // silent adjustment instead of sounding it (README: "pressing and
+    // releasing a chord key while holding the octave shift button") -- see
+    // releaseBase for where the actual shift is applied. Also marks every
+    // currently-held octave key as having targeted a chord, so its own
+    // release won't *also* shift the global register.
+    pendingOctaveTargets.add(code);
+    heldOctaveKeys.forEach((oc) => { octaveKeyTargetedChord[oc] = true; });
+    updateUI();
+  } else {
+    refreshSound();
+  }
 }
 function releaseBase(code) {
   const idx = heldBases.indexOf(code);
   if (idx === -1) return;
   heldBases.splice(idx, 1);
-  refreshSound();
+  if (pendingOctaveTargets.delete(code)) {
+    const delta = heldOctaveKeys.reduce((sum, oc) => sum + OCTAVE_KEYS[oc], 0);
+    keyOctaveShift[code] = clampOctave((keyOctaveShift[code] || 0) + delta);
+    updateUI(); // silent -- this tap never sounded (see pressBase)
+  } else {
+    refreshSound();
+  }
 }
 function pressVariant(code) {
   if (heldVariantStack.includes(code)) return;
@@ -140,6 +215,80 @@ function releaseVariant(code) {
   heldVariantStack.splice(idx, 1);
   if (heldBases.length) refreshSound();
   else updateUI();
+}
+
+// --- Octave shift (BracketLeft = down, BracketRight = up) ----------------
+// One key, three different effects depending on what's held when *it* goes
+// down vs. what happens while it's held:
+//  - a chord key already sounding at that moment: shift that key's pitch
+//    immediately, audibly, while it keeps sounding (README: "pressing one
+//    while a chord key is depressed").
+//  - nothing held yet: this key becomes a modifier for the rest of its hold.
+//    Any chord key pressed-and-released while it's held is targeted
+//    silently instead of sounding (handled in pressBase/releaseBase above,
+//    README: "pressing and releasing a chord key while holding the octave
+//    shift button"). If no chord key ever gets targeted during the whole
+//    hold, releasing it instead shifts the *global* register (README:
+//    "without pressing a chord key").
+// All held chord keys are affected, matching the "multiple chords held"
+// convention used throughout this module (currentSound() already treats a
+// single physical control as shaping whatever's held).
+function pressOctaveKey(code) {
+  if (heldOctaveKeys.includes(code)) return;
+  heldOctaveKeys.push(code);
+  octaveKeyTargetedChord[code] = false;
+  if (heldBases.length) {
+    const delta = OCTAVE_KEYS[code];
+    heldBases.forEach((base) => {
+      keyOctaveShift[base] = clampOctave((keyOctaveShift[base] || 0) + delta);
+    });
+    octaveKeyTargetedChord[code] = true;
+    refreshSound();
+  } else {
+    updateUI();
+  }
+}
+function releaseOctaveKey(code) {
+  const idx = heldOctaveKeys.indexOf(code);
+  if (idx === -1) return;
+  heldOctaveKeys.splice(idx, 1);
+  const targeted = octaveKeyTargetedChord[code];
+  delete octaveKeyTargetedChord[code];
+  if (!targeted) state.globalOctaveShift = clampOctave(state.globalOctaveShift + OCTAVE_KEYS[code]);
+  if (heldBases.length) refreshSound();
+  else updateUI();
+}
+
+// --- Inversions (Slash) ---------------------------------------------------
+// Cycles every currently-held chord key's inversion by one step. See
+// theory.js's invertOffsets for why this just increments a raw counter
+// rather than storing/clamping a bounded index here.
+function cycleInversion() {
+  if (!heldBases.length) return;
+  heldBases.forEach((code) => { keyInversion[code] = (keyInversion[code] || 0) + 1; });
+  refreshSound();
+}
+
+// --- Chord lock (Period) --------------------------------------------------
+// Locks whatever variant is currently held to every currently-held chord
+// key, so each keeps sounding shaped by it even once the variant key itself
+// is released. Pressing it again while holding the same chord key(s) updates
+// the lock to whatever variant is held now, or clears it if none is.
+function toggleLock() {
+  if (!heldBases.length) return;
+  const heldVariantCode = heldVariantStack[heldVariantStack.length - 1];
+  const variantId = heldVariantCode ? VARIANT_KEYS[heldVariantCode] : null;
+  heldBases.forEach((code) => {
+    if (variantId) lockedModifier[code] = variantId;
+    else delete lockedModifier[code];
+  });
+  refreshSound();
+}
+
+// --- Playback mode (Backquote) --------------------------------------------
+function cycleMode() {
+  state.modeIndex = (state.modeIndex + 1) % MODES.length;
+  refreshSound();
 }
 
 function changeKey(delta) {
@@ -198,11 +347,15 @@ export function initInput() {
     if (e.repeat) return;
     if (BASE_CODES.has(e.code)) { e.preventDefault(); pressBase(e.code); return; }
     if (VARIANT_CODES.has(e.code)) { e.preventDefault(); pressVariant(e.code); return; }
+    if (OCTAVE_KEYS[e.code] !== undefined) { e.preventDefault(); pressOctaveKey(e.code); return; }
     switch (e.code) {
       case 'ArrowLeft': e.preventDefault(); changeKey(-1); break;
       case 'ArrowRight': e.preventDefault(); changeKey(1); break;
       case 'ArrowUp': e.preventDefault(); changeVoice(1); break;
       case 'ArrowDown': e.preventDefault(); changeVoice(-1); break;
+      case 'Slash': e.preventDefault(); cycleInversion(); break;
+      case 'Period': e.preventDefault(); toggleLock(); break;
+      case 'Backquote': e.preventDefault(); cycleMode(); break;
       // Space, not Tab: Tab can be intercepted by browser/OS focus-cycling
       // accessibility features (e.g. macOS's Full Keyboard Access) before the
       // page ever sees the keydown -- silently breaking recording, not just
@@ -214,6 +367,7 @@ export function initInput() {
   window.addEventListener('keyup', (e) => {
     if (BASE_CODES.has(e.code)) { e.preventDefault(); releaseBase(e.code); return; }
     if (VARIANT_CODES.has(e.code)) { e.preventDefault(); releaseVariant(e.code); return; }
+    if (OCTAVE_KEYS[e.code] !== undefined) { e.preventDefault(); releaseOctaveKey(e.code); return; }
     if (e.code === 'Space') { e.preventDefault(); toggleRecord(false); }
   });
 
@@ -229,6 +383,10 @@ export function initInput() {
 function panic() {
   heldBases = [];
   heldVariantStack = [];
+  heldOctaveKeys = [];
+  octaveKeyTargetedChord = {};
+  pendingOctaveTargets = new Set();
+  arpeggiator.stop();
   engine.stopChord('live');
   if (recorder.state === 'recording') recorder.stopRecording();
   updateUI();
@@ -255,6 +413,10 @@ export function initPointerControls(root) {
     const code = el.dataset.variant;
     bindPress(el, () => pressVariant(code), () => releaseVariant(code));
   });
+  root.querySelectorAll('[data-octave]').forEach((el) => {
+    const code = el.dataset.octave;
+    bindPress(el, () => pressOctaveKey(code), () => releaseOctaveKey(code));
+  });
   root.querySelector('[data-action="key-prev"]').addEventListener('click', () => changeKey(-1));
   root.querySelector('[data-action="key-next"]').addEventListener('click', () => changeKey(1));
   root.querySelector('[data-action="voice-prev"]').addEventListener('click', () => changeVoice(-1));
@@ -264,6 +426,9 @@ export function initPointerControls(root) {
   root.querySelector('[data-action="quantize-down"]').addEventListener('click', () => changeQuantize(-1));
   root.querySelector('[data-action="quantize-up"]').addEventListener('click', () => changeQuantize(1));
   root.querySelector('[data-action="click-toggle"]').addEventListener('click', () => toggleClick());
+  root.querySelector('[data-action="inversion"]').addEventListener('click', () => cycleInversion());
+  root.querySelector('[data-action="lock"]').addEventListener('click', () => toggleLock());
+  root.querySelector('[data-action="mode-tap"]').addEventListener('click', () => cycleMode());
   bindPress(root.querySelector('[data-action="record"]'), () => toggleRecord(true), () => toggleRecord(false));
   root.querySelector('[data-action="clear-loop"]').addEventListener('click', () => {
     recorder.clear();

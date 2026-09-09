@@ -2,23 +2,50 @@
 // static markup already in index.html (no DOM construction here, so the
 // visual layout lives entirely in HTML/CSS where it's easy to tweak).
 
-import { VARIANTS, NEUTRAL_VARIANT, variantChordName } from './theory.js';
+import { VARIANTS, NEUTRAL_VARIANT, variantChordName, chordDisplayName } from './theory.js';
 import { midiName } from './audio.js';
 import { CHORD_KEYS, VARIANT_KEYS } from './input.js';
 
-export function renderUI({ key, voice, heldBases, heldVariant, loopState, bpm, quantizeDivision, clickEnabled, playingNotes }) {
-  // Whatever's actually shaping the sound right now -- the held variant if
-  // one is, otherwise the neutral center one -- same resolution currentSound()
-  // uses in input.js. variantChordName(..., NEUTRAL_VARIANT) reduces to the
-  // plain diatonic triad name, so this one path covers "nothing held" too.
-  const effectiveVariant = heldVariant ? VARIANT_KEYS[heldVariant] : NEUTRAL_VARIANT;
+const MODE_LABELS = { chord: 'Chord', bass: 'Bass', arpeggio: 'Arpeggio', lead: 'Lead' };
+
+export function renderUI({
+  key,
+  voice,
+  mode,
+  heldBases,
+  soundingBases,
+  pendingBases,
+  heldVariant,
+  lockedModifier,
+  keyOctaveShift,
+  keyInversion,
+  globalOctaveShift,
+  loopState,
+  bpm,
+  quantizeDivision,
+  clickEnabled,
+  playingNotes,
+}) {
+  const physicalVariantId = heldVariant ? VARIANT_KEYS[heldVariant] : null;
 
   document.querySelectorAll('[data-base]').forEach((el) => {
     const code = el.dataset.base;
     const degreeIndex = CHORD_KEYS.findIndex((k) => k.code === code);
+    // What's actually shaping this specific button's sound right now: the
+    // physically-held variant overrides everything (same precedence
+    // currentSound() in input.js uses live), otherwise this key's own
+    // chord-lock if it has one, otherwise the plain diatonic triad.
+    const effectiveVariant = physicalVariantId || lockedModifier[code] || NEUTRAL_VARIANT;
+    const octaveShift = globalOctaveShift + (keyOctaveShift[code] || 0);
+    const inversionIndex = keyInversion[code] || 0;
     const nameEl = el.querySelector('.chord-name');
-    if (nameEl) nameEl.textContent = variantChordName(key.pc, degreeIndex, effectiveVariant);
-    el.classList.toggle('active', heldBases.includes(code));
+    if (nameEl) nameEl.textContent = chordDisplayName(key.pc, degreeIndex, effectiveVariant, { inversionIndex, octaveShift });
+    // 'active' means actually sounding; a chord key held only to silently
+    // target it for an octave adjustment (see input.js's pressBase) gets
+    // 'targeting' instead, so it reads as held without implying sound.
+    el.classList.toggle('active', soundingBases.includes(code));
+    el.classList.toggle('targeting', pendingBases.includes(code));
+    el.classList.toggle('locked', code in lockedModifier);
   });
 
   // Variant buttons normally show their own static description (what the
@@ -52,6 +79,12 @@ export function renderUI({ key, voice, heldBases, heldVariant, loopState, bpm, q
 
   const quantizeLabel = document.querySelector('[data-display="quantize"]');
   if (quantizeLabel) quantizeLabel.textContent = `1/${quantizeDivision}`;
+
+  const octaveLabel = document.querySelector('[data-display="octave"]');
+  if (octaveLabel) octaveLabel.textContent = globalOctaveShift > 0 ? `+${globalOctaveShift}` : `${globalOctaveShift}`;
+
+  const modeLabel = document.querySelector('[data-display="mode"]');
+  if (modeLabel) modeLabel.textContent = MODE_LABELS[mode];
 
   const clickBtn = document.querySelector('[data-action="click-toggle"]');
   if (clickBtn) clickBtn.classList.toggle('active', clickEnabled);

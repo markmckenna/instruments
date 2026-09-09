@@ -45,6 +45,21 @@
         </div>
         <button type="button" class="pill-btn" data-action="quantize-up" aria-label="Finer quantize">&uarr;</button>
       </div>
+      <div class="control-group" aria-label="Octave">
+        <button type="button" class="pill-btn" data-octave="BracketLeft" aria-label="Octave down">[</button>
+        <div class="display">
+          <span class="display-label">Octave</span>
+          <span class="display-value" data-display="octave">0</span>
+        </div>
+        <button type="button" class="pill-btn" data-octave="BracketRight" aria-label="Octave up">]</button>
+      </div>
+      <div class="control-group" aria-label="Mode">
+        <div class="display">
+          <span class="display-label">Mode</span>
+          <span class="display-value" data-display="mode">Chord</span>
+        </div>
+        <button type="button" class="pill-btn pill-btn-text" data-action="mode-tap" aria-label="Cycle playback mode">tap</button>
+      </div>
     </header>
 
     <main class="stage">
@@ -72,7 +87,7 @@
       </section>
 
       <section class="panel" aria-label="Chord buttons">
-        <h2 class="panel-title">Chords <span class="hint">hold JIKOLP;</span></h2>
+        <h2 class="panel-title">Chords <span class="hint">hold JIKOLP; · hold + [ ] shifts octave · hold + / inverts · hold + . locks</span></h2>
         <div class="chord-keyboard">
           <!-- Grid areas place I/O/P on the top row and J/K/L/; on the
                bottom row (each top button centered above the boundary of two
@@ -99,6 +114,14 @@
             <span class="key-letter">;</span><span class="degree">vii°</span><span class="chord-name">B°</span>
           </button>
         </div>
+        <div class="chord-modifiers">
+          <button type="button" class="modifier-btn" data-action="inversion">
+            <span class="key-letter">/</span>Invert
+          </button>
+          <button type="button" class="modifier-btn" data-action="lock">
+            <span class="key-letter">.</span>Lock
+          </button>
+        </div>
       </section>
     </main>
 
@@ -115,8 +138,10 @@
     </footer>
 
     <p class="footnote">
-      Desktop: keyboard as above, arrows to change key/voice, Space to loop.
-      Mobile/no keyboard: use the on-screen buttons for everything.
+      Desktop: keyboard as above, arrows to change key/voice, Space to loop,
+      [ ] to shift octave, / to invert, . to lock a modifier, ` to change
+      playback mode. Mobile/no keyboard: use the on-screen buttons for
+      everything.
     </p>
   </div>
 

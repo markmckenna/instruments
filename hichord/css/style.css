@@ -97,6 +97,20 @@ button {
 .control-group[aria-label="Voice"] { --group-accent: var(--accent-voice); }
 .control-group[aria-label="Tempo"],
 .control-group[aria-label="Quantize"] { --group-accent: var(--accent-mode); }
+/* Octave/Mode have no real-hardware equivalent to match a color to (see the
+   file-header comment above) -- Octave stays the default accent (it's a
+   register control, closest in kind to Key), Mode reuses Voice's yellow
+   (it's also picking *how* a chord sounds, not which one). */
+.control-group[aria-label="Mode"] { --group-accent: var(--accent-voice); }
+
+/* Text pill buttons (e.g. the Mode "tap" button) need more than the 2rem
+   circle a single glyph fits in. */
+.pill-btn-text {
+  width: auto;
+  padding: 0 0.6rem;
+  font-size: 0.75rem;
+  border-radius: 999px;
+}
 
 .pill-btn {
   width: 2rem;
@@ -242,6 +256,47 @@ button {
   color: var(--key-text-active);
   opacity: 0.7;
 }
+/* Held only to silently target it for an octave adjustment (see input.js's
+   pressBase) -- an outline, not the solid "sounding" fill .active gets. */
+.chord-btn.targeting {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+/* Has a modifier locked to it (see input.js's toggleLock) -- the locked
+   shape is already visible in the chord name itself; this dot is just a
+   quick visual flag that it's a lock, not the neutral triad. */
+.chord-btn.locked::before {
+  content: '';
+  position: absolute;
+  top: 0.4rem;
+  left: 0.5rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.chord-btn.locked.active::before { background: var(--key-text-active); }
+
+/* Inversion/lock: momentary chord-key modifiers (hold a chord, tap one of
+   these), so styled like the variant grid's own buttons rather than the
+   simple click-only pill controls. */
+.chord-modifiers {
+  display: flex;
+  gap: 0.4rem;
+}
+.modifier-btn {
+  position: relative;
+  flex: 1;
+  background: var(--key-face);
+  border-radius: 0.7rem;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.modifier-btn .key-letter { position: static; opacity: 0.6; }
 
 /* --- Variant grid --- */
 
