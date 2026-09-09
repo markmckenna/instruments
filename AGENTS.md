@@ -87,10 +87,12 @@ note it in `PROCESS.md` and as a comment in the promoted code itself.
   exit 0 and print exactly `PASSED` on success; on failure, print
   diagnostics specific enough to localize the problem and save the full
   output to a file (named in the failure text). Nontrivial validation logic
-  lives in that level's own `tools/check.sh`, which the Makefile's `check`
-  target just calls -- see `tools/check.sh` (root) and
-  `hichord/tools/check.sh` for the pattern to follow when adding another
-  instrument's.
+  lives in that level's own `tools/check.sh` -- see `hichord/tools/check.sh`
+  for the pattern to follow when adding another instrument's. The root
+  target itself just delegates to each instrument's `make check` directly
+  (no `tools/check.sh` of its own): with one instrument that already meets
+  the contract as-is; once a second instrument means more than one PASSED
+  to suppress into one, give the root target its own `tools/check.sh` too.
 - `run` should be self-sufficient: serve the directory locally and open it
   in the default browser, blocking in the foreground so `Ctrl+C` cleanly
   stops the server.

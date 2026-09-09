@@ -28,8 +28,8 @@ cat "$log"
 echo
 echo "FAILED: hichord's Playwright suite -- see tests/README.md for what's covered."
 echo "Full output saved to hichord/$log."
-if ls test-results/*/trace.zip >/dev/null 2>&1; then
-  echo "Trace(s) for the failing test(s) saved under hichord/test-results/ -- inspect one with:"
+if ls build/test-results/*/trace.zip >/dev/null 2>&1; then
+  echo "Trace(s) for the failing test(s) saved under hichord/build/test-results/ -- inspect one with:"
   echo "  npx playwright show-trace <path-to-trace.zip>"
 fi
 exit "$status"

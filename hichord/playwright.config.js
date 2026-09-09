@@ -8,6 +8,9 @@ const PORT = 4174;
 
 export default defineConfig({
   testDir: './tests',
+  // Alongside check.sh's own build/check.log, so every generated artifact
+  // lives under build/ instead of a separate top-level test-results/.
+  outputDir: 'build/test-results',
   fullyParallel: true,
   reporter: 'list',
   use: {

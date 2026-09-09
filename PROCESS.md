@@ -64,9 +64,11 @@ live with their subject") for the split.
   diagnostics specific enough to localize the problem plus save the full
   output to a file (named in the failure text). Nontrivial validation logic
   lives in that level's own `tools/check.sh`, which `make check` just calls
-  -- see `tools/check.sh` (root, a collection: runs every instrument's
-  `make check` and suppresses their individual PASSEDs into its own one) and
-  `hichord/tools/check.sh` (a leaf: wraps Playwright) for the pattern.
+  -- see `hichord/tools/check.sh` (wraps Playwright) for the pattern. The
+  root target has no `tools/check.sh` of its own: with a single instrument,
+  delegating straight to its `make check` already satisfies the contract;
+  reintroduce a root-level collection script once a second instrument's
+  PASSED needs suppressing into the root's own.
 
 ## Git workflow
 

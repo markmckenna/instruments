@@ -9,8 +9,12 @@
 #
 # `make check` is the strict-contract entrypoint (see ~/.claude/CLAUDE.md
 # "Validation"): exit 0 and print exactly `PASSED` on success, or exit
-# nonzero with diagnostics + a saved log on failure. tools/check.sh
-# implements that; this target just calls it.
+# nonzero with diagnostics + a saved log on failure. It just delegates to
+# each instrument's own `make check`, which already satisfies that contract
+# on its own (see e.g. hichord/tools/check.sh) -- with a single instrument,
+# that's already exactly one PASSED/failure, so there's nothing here worth
+# wrapping in its own tools/check.sh. Revisit that once a second instrument
+# means more than one PASSED would need suppressing into this target's own.
 
 INSTRUMENTS := hichord
 
@@ -29,7 +33,7 @@ list:
 	@echo "$(INSTRUMENTS)"
 
 check:
-	@bash tools/check.sh
+	@for i in $(INSTRUMENTS); do $(MAKE) --no-print-directory -C $$i check || exit 1; done
 
 $(INSTRUMENTS):
 	@$(MAKE) -C $@ run

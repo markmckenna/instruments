@@ -15,7 +15,7 @@ or planning a feature; update it whenever a concept is added or removed.
 - **Validator contract** — every `make check`, at every level, follows the
   same strict PASSED/failure contract, with nontrivial logic delegated to
   that level's own `tools/check.sh`. [`Makefile`](Makefile),
-  [`tools/check.sh`](tools/check.sh)
+  [`hichord/tools/check.sh`](hichord/tools/check.sh)
 
 ## HiChord (`hichord/`)
 
