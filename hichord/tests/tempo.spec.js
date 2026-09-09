@@ -37,18 +37,96 @@ test.describe('Tempo (pure logic, no browser/audio needed)', () => {
 });
 
 test('page loads with the documented tempo defaults', async ({ page }) => {
-  await expect(page.locator('[data-display="bpm"]')).toHaveText('120');
+  await expect(page.locator('[data-display="bpm"]')).toHaveValue('120');
   await expect(page.locator('[data-display="quantize"]')).toHaveText('1/32');
   await expect(page.locator('[data-action="click-toggle"]')).not.toHaveClass(/active/);
 });
 
 test('the bpm control raises/lowers the displayed tempo', async ({ page }) => {
   const bpmDisplay = page.locator('[data-display="bpm"]');
+  // A plain tap/click, released well before the typematic delay -- see the
+  // hold-to-repeat test below for the auto-repeat behavior itself.
   await page.click('[data-action="bpm-up"]');
   await page.click('[data-action="bpm-up"]');
-  await expect(bpmDisplay).toHaveText('122');
+  await expect(bpmDisplay).toHaveValue('122');
   await page.click('[data-action="bpm-down"]');
-  await expect(bpmDisplay).toHaveText('121');
+  await expect(bpmDisplay).toHaveValue('121');
+});
+
+test('holding +/- (keyboard or on-screen) repeats at a typematic rate instead of firing once', async ({ page }) => {
+  const bpmDisplay = page.locator('[data-display="bpm"]');
+
+  await holdKey(page, '+');
+  // Comfortably past input.js's typematic delay (400ms) plus a couple of its
+  // 60ms repeat ticks -- several increments beyond the single tap this would
+  // have been before.
+  await page.waitForTimeout(700);
+  await releaseKey(page, '+');
+  const afterHold = parseInt(await bpmDisplay.inputValue(), 10);
+  // A single tap gives 121; auto-repeat over 700ms (400ms delay + several
+  // 60ms ticks) must land well past that.
+  expect(afterHold).toBeGreaterThanOrEqual(123);
+
+  const settled = afterHold;
+  await page.waitForTimeout(200); // releasing must actually stop the repeat, not just the visible key
+  await expect(bpmDisplay).toHaveValue(String(settled));
+
+  // Same behavior via the on-screen button, held with a real mouse press
+  // rather than tapped -- see support/interactions.js.
+  const btn = page.locator('[data-action="bpm-down"]');
+  const box = await btn.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+  const afterMouseHold = parseInt(await bpmDisplay.inputValue(), 10);
+  expect(afterMouseHold).toBeLessThanOrEqual(settled - 3); // a single tap would only give settled - 1
+});
+
+test('typing a bpm and pressing Enter sets it exactly', async ({ page }) => {
+  const bpmDisplay = page.locator('[data-display="bpm"]');
+  await bpmDisplay.click();
+  await bpmDisplay.fill('90');
+  await bpmDisplay.press('Enter');
+  await expect(bpmDisplay).toHaveValue('90');
+  await expect(bpmDisplay).not.toBeFocused(); // Enter commits and un-focuses the field
+});
+
+test('blurring the bpm field without pressing Enter reverts it instead of keeping the half-typed value', async ({
+  page,
+}) => {
+  const bpmDisplay = page.locator('[data-display="bpm"]');
+  await bpmDisplay.click();
+  await bpmDisplay.fill('55');
+  // Blur directly rather than clicking another control: a <button> doesn't
+  // reliably take focus on click across browsers (notably Firefox on
+  // macOS), which would leave the field focused and this test meaningless.
+  await page.evaluate(() => document.activeElement.blur());
+  await expect(bpmDisplay).toHaveValue('120'); // the actual bpm, untouched
+});
+
+test('tapping the click button four times in a row sets the bpm to match the tap tempo, not just toggling the click', async ({
+  page,
+}) => {
+  const bpmDisplay = page.locator('[data-display="bpm"]');
+  const clickBtn = page.locator('[data-action="click-toggle"]');
+  // Taps 0.3s apart -> a 200bpm cue -- deliberately far from the 120bpm
+  // default so a passing bpm can only mean the cue actually fired, not that
+  // tap-tempo silently did nothing and left the untouched default reading.
+  const TAP_INTERVAL_MS = 300;
+
+  for (let i = 0; i < 4; i++) {
+    await clickBtn.click();
+    if (i < 3) await page.waitForTimeout(TAP_INTERVAL_MS);
+  }
+
+  const bpm = parseInt(await bpmDisplay.inputValue(), 10);
+  // Generous window -- Playwright/page overhead per click stretches the
+  // actual gaps a little past the nominal 300ms (more so under parallel
+  // workers), which reads as a somewhat lower bpm; this only needs to prove
+  // the cue landed near 200, not exactly.
+  expect(bpm).toBeGreaterThanOrEqual(150);
+  expect(bpm).toBeLessThanOrEqual(220);
 });
 
 test('the quantize control halves/doubles the displayed resolution', async ({ page }) => {
@@ -64,12 +142,12 @@ test('the bpm control also responds to the +/- keyboard shortcut', async ({ page
   const bpmDisplay = page.locator('[data-display="bpm"]');
   await holdKey(page, '-');
   await releaseKey(page, '-');
-  await expect(bpmDisplay).toHaveText('119');
+  await expect(bpmDisplay).toHaveValue('119');
   await holdKey(page, '+');
   await releaseKey(page, '+');
   await holdKey(page, '+');
   await releaseKey(page, '+');
-  await expect(bpmDisplay).toHaveText('121');
+  await expect(bpmDisplay).toHaveValue('121');
 });
 
 // { and } are Shift+[ / Shift+] on a physical keyboard, not distinct keys --

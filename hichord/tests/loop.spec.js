@@ -180,7 +180,11 @@ test('cycling voices after recording reshapes live play but not the loop already
 
   // Loop length is 0.5s (one beat at 120bpm, see the loop-length test above);
   // 1.2s spans more than one replay, so dedupe before comparing -- it's the
-  // *set* of frequencies used that must match Soft Pad, not the count.
+  // *set* of frequencies used that must match Soft Pad, not the count. Dedupe
+  // the expected side too: the chord's own root-doubled-an-octave-up note
+  // (see audio.js's buildChord) coincidentally shares a frequency with a
+  // lower note's own octave-up harmonic partial, so the raw expected list
+  // isn't pairwise-distinct here even within a single chord instance.
   const mark = await markAudio(page);
   await page.waitForTimeout(1200);
   const replayed = [
@@ -190,7 +194,8 @@ test('cycling voices after recording reshapes live play but not the loop already
         .map((e) => e.freq),
     ),
   ].sort((a, b) => a - b);
-  expect(replayed).toEqual(expectedChordFrequencies(0, 0, 'neutral', 0)); // still Soft Pad -- the voice in effect when it was recorded, not the now-current Pluck
+  const expected = [...new Set(expectedChordFrequencies(0, 0, 'neutral', 0))].sort((a, b) => a - b);
+  expect(replayed).toEqual(expected); // still Soft Pad -- the voice in effect when it was recorded, not the now-current Pluck
 });
 
 test('a chord held live keeps sounding on top of loop playback', async ({ page }) => {
@@ -207,4 +212,45 @@ test('a chord held live keeps sounding on top of loop playback', async ({ page }
   expect(startedLive.length).toBeGreaterThan(0);
 
   await releaseKey(page, 'o');
+});
+
+test('a note that follows a long silent stretch in the loop still gets its full attack on every repeat', async ({
+  page,
+}) => {
+  // Regression case: a gap of dead air followed by a burst of quick notes at
+  // a very fine quantize grid -- reported as the first note after the gap
+  // sounding late and without an attack, identically on every repeat. See
+  // audio.js's AudioEngine._notBefore for the fix (never schedule a ramp
+  // whose endpoints are already behind the audio clock) and fixtures.js's
+  // 'param' probe events this asserts against.
+  await page.click('[data-action="quantize-up"]'); // 1/32 -> 1/64
+  await page.click('[data-action="quantize-up"]'); // 1/64 -> 1/128
+  await expect(page.locator('[data-display="quantize"]')).toHaveText('1/128');
+
+  // A faster tempo keeps the loop (and so this test) short while still
+  // exercising the same fine 1/128 grid the report used -- quantize
+  // resolution is a division of the beat, independent of bpm.
+  const bpmInput = page.locator('[data-display="bpm"]');
+  await bpmInput.click();
+  await bpmInput.fill('240');
+  await bpmInput.press('Enter');
+  await expect(bpmInput).toHaveValue('240');
+
+  await holdKey(page, 'Space');
+  await page.waitForTimeout(1000); // ~4 beats of dead air at 240bpm
+  for (const key of ['j', 'i', 'k', 'o']) {
+    await holdKey(page, key);
+    await page.waitForTimeout(40);
+    await releaseKey(page, key);
+    await page.waitForTimeout(20);
+  }
+  await releaseKey(page, 'Space');
+  await expect(page.locator('[data-display="loop"]')).toHaveText('Looping');
+
+  const mark = await markAudio(page);
+  await page.waitForTimeout(4000); // several full repeats of the (short, fast-tempo) loop
+  const paramEvents = (await audioEventsSince(page, mark)).filter((e) => e.type === 'param');
+  expect(paramEvents.length).toBeGreaterThan(0); // sanity check the probe actually saw playback happen
+  const late = paramEvents.filter((e) => e.scheduledFor < e.calledAt);
+  expect(late).toEqual([]);
 });

@@ -71,8 +71,8 @@ test('the now-playing panel shows the actual sounding notes, named out', async (
   const notesDisplay = page.locator('[data-display="playing-notes"]');
   await expect(notesDisplay).toHaveText('—');
 
-  await holdKey(page, 'j'); // C major triad, root anchored at MIDI 60 (C4): C4 E4 G4
-  await expect(notesDisplay).toHaveText('C4 E4 G4');
+  await holdKey(page, 'j'); // C major triad, root anchored at MIDI 60 (C4), plus its root doubled up an octave
+  await expect(notesDisplay).toHaveText('C4 E4 G4 C5');
 
   await releaseKey(page, 'j');
   await expect(notesDisplay).toHaveText('—');

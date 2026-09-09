@@ -43,6 +43,19 @@ function installAudioProbe() {
     return origStop.apply(this, args);
   };
 
+  // Records every gain-envelope automation call alongside *when* it was
+  // scheduled to take effect vs. the audio clock at the moment it was
+  // actually called -- lets a test assert that a note's attack/release ramp
+  // never gets asked to start in the past (audio.js's AudioEngine._notBefore
+  // guards against exactly that: Web Audio collapses a ramp whose endpoints
+  // are already behind the clock into an instant jump instead of an audible
+  // ramp, which is what a "late, no attack" note actually is).
+  const origSetValueAtTime = AudioParam.prototype.setValueAtTime;
+  AudioParam.prototype.setValueAtTime = function (value, time) {
+    window.__audioEvents.push({ type: 'param', scheduledFor: time, calledAt: window.__audioContext.currentTime });
+    return origSetValueAtTime.call(this, value, time);
+  };
+
   // AudioBufferSourceNode has no .frequency -- only AudioEngine.playClick()
   // (the metronome click, a noise burst) uses one in this app, so a 'click'
   // event unambiguously means a click fired.
