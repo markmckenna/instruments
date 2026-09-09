@@ -36,7 +36,7 @@ export function midiName(midi) {
  * @param {number} [options.baseMidi] MIDI note the key root is anchored near (default 60)
  * @param {number} [options.octaveShift] whole octaves to transpose this chord's root by -- global register + this key's own offset, see input.js
  * @param {number} [options.inversionIndex] which inversion to voice, see theory.js's invertOffsets
- * @param {'chord'|'bass'|'arpeggio'|'lead'} [options.mode] playback mode (see input.js): 'arpeggio' shapes the note *set* the same as 'chord' -- sequencing it one at a time is input.js's Arpeggiator's job, not this function's; 'lead' drops the chord to just its root; 'bass' adds a low root note under it
+ * @param {'chord'|'arpeggio'|'lead'} [options.mode] playback mode (see input.js): 'arpeggio' shapes the note *set* the same as 'chord' -- sequencing it one at a time is input.js's Arpeggiator's job, not this function's; 'lead' drops the chord to just its root. The bass note is a separate toggle, not a mode -- see buildBassNote below.
  * @returns {number[]} MIDI note numbers, root first
  */
 export function buildChord(keyPc, degreeIndex, variantId, options = {}) {
@@ -57,9 +57,29 @@ export function buildChord(keyPc, degreeIndex, variantId, options = {}) {
   const offsets = invertOffsets(variant.offsets(degree.quality), inversionIndex);
   const notes = offsets.map((o) => rootMidi + o);
 
-  if (mode === 'bass') notes.push(rootMidi - 24); // this chord's own root, 2 octaves down, regardless of the voicing (incl. inversion) above it
+  // Every chord doubles its own root an octave up by default, added last
+  // (after inversion, like the bass note below) so it's a fixed top note
+  // rather than something an inversion could rotate away. Skipped if the
+  // shape already lands a note there itself (e.g. a triad's own 1st
+  // inversion already puts its root at +12) to avoid sounding it twice.
+  const octaveUpRoot = rootMidi + 12;
+  if (!notes.includes(octaveUpRoot)) notes.push(octaveUpRoot);
 
   return notes;
+}
+
+/**
+ * The low bass note for a chord button (its own root, always anchored in
+ * scientific-pitch octave 2 -- see midiName -- regardless of that key's own
+ * octave shift or the global register: the bass toggle (see input.js) is
+ * meant to give a steady, predictable low end, not one that follows
+ * register shifts made for the chord above it). Independent of `mode`,
+ * variant, and inversion, same as `buildChord`'s own root always is.
+ */
+export function buildBassNote(keyPc, degreeIndex) {
+  const degree = DEGREES[degreeIndex];
+  const pc = (keyPc + degree.interval) % 12;
+  return 36 + pc; // 36 = C2
 }
 
 export const VOICES = [
@@ -229,7 +249,7 @@ export class AudioEngine {
    */
   playClick(when) {
     this.unlock();
-    const t = when ?? this.ctx.currentTime;
+    const t = this._notBefore(when);
     const ctx = this.ctx;
     const noise = ctx.createBufferSource();
     noise.buffer = this.clickBuffer;
@@ -273,7 +293,7 @@ export class AudioEngine {
    */
   playChord(voiceId, midiNotes, when, voice = this.voice) {
     this.unlock();
-    const t = when ?? this.ctx.currentTime;
+    const t = this._notBefore(when);
     const existing = this.active.get(voiceId) || [];
     const target = new Set(midiNotes);
     const keep = existing.filter((note) => target.has(note.midi));
@@ -297,9 +317,27 @@ export class AudioEngine {
    */
   stopChord(voiceId, when, voice = this.voice) {
     if (!this.ctx || !this.active.has(voiceId)) return;
-    const t = when ?? this.ctx.currentTime;
+    const t = this._notBefore(when);
     this.active.get(voiceId).forEach((note) => this._releaseNote(note, voice.release, t));
     this.active.delete(voiceId);
+  }
+
+  /**
+   * Resolve a caller-supplied `when` (or "now" if omitted) to a time never
+   * earlier than the current audio-clock instant. A lookahead scheduler
+   * (loop.js, metronome.js) always computes `when` to land comfortably in
+   * the future, but a delayed setInterval tick (main-thread jank) can still
+   * make the actual playChord/stopChord call happen *after* that instant
+   * has already passed. Scheduling an attack/release ramp whose start and
+   * end are both already behind the audio clock doesn't play out as a ramp
+   * at all -- Web Audio just snaps straight to the ramp's endpoint -- which
+   * is what a note that sounds "late, with no attack" (or an abrupt,
+   * click-y release) actually is. Clamping here guarantees every note this
+   * engine ever schedules gets its full envelope, at the cost of landing a
+   * hair later than originally intended only in that rare delayed-tick case.
+   */
+  _notBefore(when) {
+    return Math.max(when ?? this.ctx.currentTime, this.ctx.currentTime);
   }
 
   _releaseNote(note, releaseTime, at) {

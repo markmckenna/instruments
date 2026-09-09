@@ -13,7 +13,14 @@ export class LoopRecorder {
     this.tempo = tempo;
     this.metronome = metronome;
     this.state = 'idle'; // 'idle' | 'recording' | 'playing'
-    this.events = []; // { t: secondsFromLoopStart, type: 'on' | 'off', notes }
+    // { t: secondsFromLoopStart, type: 'on' | 'off', notes, track: 'main' | 'bass' }
+    // Two independent tracks share one event list (ordered by `t`) rather
+    // than two separate lists: 'main' is whatever the current playback mode
+    // produces (chord/lead, or the arpeggiator's note-by-note stepping),
+    // 'bass' is the bass-toggle's low root, which needs its own voice so
+    // arpeggio stepping on 'main' never touches it (see input.js's
+    // refreshSound) -- "don't arpeggiate the bass note".
+    this.events = [];
     this.loopLength = 0;
     this.voice = null; // engine voice preset in effect when this recording was made
     this._recordStart = 0;
@@ -21,21 +28,23 @@ export class LoopRecorder {
     this._loopStartCtxTime = 0;
     this._nextEventIndex = 0;
     this._iteration = 0;
-    this._lastOnShift = 0; // quantize shift applied to the most recent 'on', carried onto its 'off' -- see recordEvent()
+    this._lastOnShift = { main: 0, bass: 0 }; // quantize shift applied to each track's most recent 'on', carried onto its own 'off' -- see recordEvent()
   }
 
   startRecording() {
     this._stopScheduler();
     this.engine.unlock();
-    this.engine.stopChord('loop', undefined, this.voice); // don't leave the old loop's last chord ringing forever, released in *its* voice
+    // Don't leave the old loop's last chord (or bass note) ringing forever, released in *its* voice.
+    this.engine.stopChord('loop', undefined, this.voice);
+    this.engine.stopChord('loop-bass', undefined, this.voice);
     this.events = [];
     this.state = 'recording';
     this._recordStart = this.engine.ctx.currentTime;
-    this._lastOnShift = 0;
+    this._lastOnShift = { main: 0, bass: 0 };
     this.voice = this.engine.voice; // pin to what's selected now -- cycling voices later reshapes only live playing, not this loop
   }
 
-  recordEvent(type, notes) {
+  recordEvent(type, notes, track = 'main') {
     if (this.state !== 'recording') return;
     // `notes` is always the *complete* set sounding at this instant, not a
     // delta, so playback can run each event through the same playChord()
@@ -48,22 +57,31 @@ export class LoopRecorder {
       // Quantize the onset itself -- position on the grid is what playing
       // "in time" means.
       t = this.tempo.quantize(raw);
-      this._lastOnShift = t - raw;
+      this._lastOnShift[track] = t - raw;
     } else {
       // Leave the *release* unquantized: duration is feel, not a grid
       // position, and quantizing on/off independently could round a short
       // note's release down onto the same instant as its onset, silencing
       // it. Instead carry the onset's shift over so the note keeps its
-      // actual held length. Clamp to the previous event so a note shorter
-      // than the shift itself can't invert into a negative duration.
-      const prevT = this.events.length ? this.events[this.events.length - 1].t : 0;
-      t = Math.max(raw + this._lastOnShift, prevT);
+      // actual held length. Clamp to this track's own previous event so a
+      // note shorter than the shift itself can't invert into a negative
+      // duration.
+      const prevOfTrack = this._lastEventOfTrack(track);
+      t = Math.max(raw + this._lastOnShift[track], prevOfTrack ? prevOfTrack.t : 0);
     }
     // Two events can legitimately land on the same instant; keep both rather
     // than collapsing the collision, since collapsing through an
     // intermediate 'off' could erase a chord that really was played
     // (on(A), off, on(B) -> just on(B)).
-    this.events.push({ t, type, notes });
+    this.events.push({ t, type, notes, track });
+  }
+
+  /** Most recently pushed event belonging to `track`, or undefined if none yet. */
+  _lastEventOfTrack(track) {
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      if (this.events[i].track === track) return this.events[i];
+    }
+    return undefined;
   }
 
   stopRecording() {
@@ -84,11 +102,18 @@ export class LoopRecorder {
     // Clamp any event past the (now-rounded) loop length, or it -- and the
     // next iteration's events -- would fire out of order.
     this.events = this.events.map((ev) => (ev.t > this.loopLength ? { ...ev, t: this.loopLength } : ev));
-    // A chord still held when recording stopped has no matching 'off'; force
-    // one at the loop boundary so playback cuts it cleanly before repeating
-    // instead of holding it continuously.
-    if (this.events[this.events.length - 1].type === 'on') {
-      this.events.push({ t: this.loopLength, type: 'off', notes: null });
+    // A chord (or bass note) still held when recording stopped has no
+    // matching 'off' on its own track; force one per track at the loop
+    // boundary so playback cuts it cleanly before repeating instead of
+    // holding it continuously. The two tracks can each be mid-'on'
+    // independently (e.g. bass toggled off moments before Space was
+    // released), so this is checked per track, not just the last event
+    // overall.
+    for (const track of ['main', 'bass']) {
+      const last = this._lastEventOfTrack(track);
+      if (last && last.type === 'on') {
+        this.events.push({ t: this.loopLength, type: 'off', notes: null, track });
+      }
     }
     this.state = 'playing';
     this._startScheduler();
@@ -98,6 +123,7 @@ export class LoopRecorder {
   stopPlaying() {
     this._stopScheduler();
     this.engine.stopChord('loop', undefined, this.voice);
+    this.engine.stopChord('loop-bass', undefined, this.voice);
     if (this.state === 'playing') this.state = 'idle';
   }
 
@@ -151,7 +177,8 @@ export class LoopRecorder {
   // is only as precise as the JS event loop -- that lateness would land
   // directly on the note's actual start/stop time, audible as drift.
   _fireEvent(ev, when) {
-    if (ev.type === 'on') this.engine.playChord('loop', ev.notes, when, this.voice);
-    else this.engine.stopChord('loop', when, this.voice);
+    const voiceId = ev.track === 'bass' ? 'loop-bass' : 'loop';
+    if (ev.type === 'on') this.engine.playChord(voiceId, ev.notes, when, this.voice);
+    else this.engine.stopChord(voiceId, when, this.voice);
   }
 }
