@@ -23,5 +23,9 @@ export default defineConfig({
     cwd: import.meta.dirname,
     reuseExistingServer: false,
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  // Firefox, not Chromium: Chromium's own Mach Port Rendezvous IPC bootstrap
+  // (mach_port_rendezvous_mac.cc) fails to check in under a nested macOS
+  // sandbox-exec profile like Claude Code's, even with --no-sandbox already
+  // passed. Firefox doesn't use that mechanism, so it launches headless fine.
+  projects: [{ name: 'firefox', use: { browserName: 'firefox' } }],
 });

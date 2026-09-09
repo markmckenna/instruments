@@ -74,11 +74,22 @@ note it in `PROCESS.md` and as a comment in the promoted code itself.
 
 ## Make conventions (the automation backbone)
 
+- Root `make init` does one-time setup (installing each instrument's own
+  dependencies) -- see the root `Makefile` for exactly what that covers. Run
+  it yourself in a plain local shell rather than asking an agent to: it
+  writes real machine-wide state outside the repo and needs your
+  environment's full permissions, not a sandboxed tool call's.
 - Root `Makefile` has one target per instrument (matching its directory
   name), e.g. `make hichord`. Each just delegates to `$(MAKE) -C <dir> run`.
 - Each instrument's own `Makefile` supports `make run` standalone (so
   `cd hichord && make run` and `make hichord` from the root do the same
   thing).
+- An instrument with browser-based tests can't run them from inside a
+  sandboxed agent session (spawning a real browser needs OS privileges such
+  a sandbox denies) -- ask the person running the session to start that
+  instrument's browser-server target themselves first. See hichord's
+  `tests/README.md` ("Running under a sandboxed agent") for the pattern to
+  reuse in a future instrument.
 - An instrument with automated validations supports `make check` standalone
   (not `test` -- `check` is the standard name for "run all automated
   validations"), and the root `make check` runs every instrument's (skip

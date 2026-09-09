@@ -1,18 +1,18 @@
 # See ../AGENTS.md ("Make conventions") before changing this.
-#
-# Usage:
-#   make run     Serve HiChord locally and open it in the default browser
-#   make stop    Kill a server left running from a backgrounded `make run`
-#   make check   Run the automated integration tests (see tests/README.md).
-#                Strict PASSED/failure contract, see tools/check.sh and
-#                ~/.claude/CLAUDE.md "Validation".
+# Run `make help` for the command list (each target's `## ` comment below is
+# that list's one source -- shown both here and by `help` itself).
 
 PORT ?= 4173
 URL := http://localhost:$(PORT)
 
-.PHONY: run open stop check
+.PHONY: help run open stop test-host-start test-host-stop check
 
-run:
+help: ## List available commands
+	@echo "hichord -- available commands:"
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-16s %s\n", $$1, $$2}'
+
+run: ## Serve HiChord locally and open it in the default browser
 	@echo "HiChord: $(URL)  (Ctrl+C to stop)"
 	@( sleep 1 && $(MAKE) --no-print-directory open ) &
 	@python3 -m http.server $(PORT) --directory . --bind 127.0.0.1
@@ -22,13 +22,28 @@ open:
 	elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$(URL)"; \
 	else echo "Open $(URL) in your browser"; fi
 
-stop:
+stop: ## Kill a server left running from a backgrounded 'make run'
 	@lsof -ti tcp:$(PORT) | xargs kill 2>/dev/null || true
 
 node_modules: package.json
 	@npm install
-	@npx playwright install chromium
+	@npx playwright install firefox
 	@touch node_modules
 
-check: node_modules
+# Browser server: a persistent, out-of-process browser that `make check`/
+# `npx playwright test` connects to (via PW_TEST_CONNECT_WS_ENDPOINT) instead
+# of launching its own browser -- see tools/browser-server.sh and
+# tests/README.md ("Running under a sandboxed agent") for why this exists.
+# Run these two yourself in a plain local shell (not through a sandboxed
+# agent session): the whole point is that the browser process gets spawned
+# by *your* shell, not a sandboxed one.
+BROWSER_SERVER_PORT ?= 4175
+
+test-host-start: node_modules ## Start the Playwright browser server (see comment above)
+	@BROWSER_SERVER_PORT=$(BROWSER_SERVER_PORT) bash tools/browser-server.sh start
+
+test-host-stop: ## Stop the Playwright browser server
+	@bash tools/browser-server.sh stop
+
+check: node_modules ## Run the automated integration tests (see tests/README.md)
 	@bash tools/check.sh

@@ -1,7 +1,7 @@
 # HiChord integration tests
 
 Automated tests that drive the real app in a real browser (Playwright +
-Chromium) -- real DOM, real keyboard/pointer events, real Web Audio. Added
+Firefox) -- real DOM, real keyboard/pointer events, real Web Audio. Added
 once the app's logic (polyphony, per-note independence across variant/key/
 chord-button changes, loop scheduling, the blur/visibility panic valve) grew
 past what a manual smoke test alone catches reliably (see `../../PROCESS.md`
@@ -9,9 +9,10 @@ past what a manual smoke test alone catches reliably (see `../../PROCESS.md`
 tests: Playwright drives the real static page in a real browser over
 `python3 -m http.server` (same server the app already uses), so the tests
 exercise the actual `input.js`/`audio.js`/`loop.js`/`theory.js` code paths
-rather than a mocked stand-in. Chromium only for now (not also WebKit/
-Safari) to keep CI-less local runs fast; cross-browser behavior stays on the
-manual checklist in `../README.md`.
+rather than a mocked stand-in. Firefox only for now (not also Chromium/
+WebKit) to keep CI-less local runs fast -- see `playwright.config.js` for
+why Firefox is the one picked; cross-browser behavior stays on the manual
+checklist in `../README.md`.
 
 ## Run them
 
@@ -20,7 +21,23 @@ cd hichord
 make check
 ```
 
-Or standalone: `npm ci && npx playwright install chromium && npx playwright test`.
+Or standalone: `npm ci && npx playwright install firefox && npx playwright test`.
+
+### Running under a sandboxed agent
+
+A sandboxed agent session (e.g. Claude Code's Bash sandbox) generally can't
+run this suite directly: spawning a real browser needs OS privileges
+(macOS Mach IPC for inter-process handoff, notably) that such a sandbox
+denies to a process it spawned itself, regardless of browser engine.
+
+The fix is to not spawn the browser from inside the sandbox at all: run
+`make test-host-start` yourself, in a plain local shell, once per session --
+it starts `playwright run-server` in the background (see `../Makefile`
+"Browser server" and `../tools/browser-server.sh`), so the actual browser
+process is a child of *your* shell, not the sandboxed one. `make check`
+picks it up automatically if it's running (falling back to launching its
+own browser otherwise), so nothing else changes. `make test-host-stop` when
+done.
 
 ## How they work
 
