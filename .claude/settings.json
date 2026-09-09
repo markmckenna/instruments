@@ -12,5 +12,10 @@
       ],
       "blockReadsOutsideWorkingDirectories": true
     }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git *)"
+    ]
   }
 }
