@@ -21,6 +21,7 @@ export class LoopRecorder {
     this._loopStartCtxTime = 0;
     this._nextEventIndex = 0;
     this._iteration = 0;
+    this._lastOnShift = 0; // quantize shift applied to the most recent 'on', carried onto its 'off' -- see recordEvent()
   }
 
   startRecording() {
@@ -30,6 +31,7 @@ export class LoopRecorder {
     this.events = [];
     this.state = 'recording';
     this._recordStart = this.engine.ctx.currentTime;
+    this._lastOnShift = 0;
     this.voice = this.engine.voice; // pin to what's selected now -- cycling voices later reshapes only live playing, not this loop
   }
 
@@ -41,11 +43,27 @@ export class LoopRecorder {
     // one event and the next just keeps sounding across them instead of
     // retriggering.
     const raw = this.engine.ctx.currentTime - this._recordStart;
-    // Two events can legitimately land on the same quantized instant; keep
-    // both rather than collapsing the collision, since collapsing through an
+    let t;
+    if (type === 'on') {
+      // Quantize the onset itself -- position on the grid is what playing
+      // "in time" means.
+      t = this.tempo.quantize(raw);
+      this._lastOnShift = t - raw;
+    } else {
+      // Leave the *release* unquantized: duration is feel, not a grid
+      // position, and quantizing on/off independently could round a short
+      // note's release down onto the same instant as its onset, silencing
+      // it. Instead carry the onset's shift over so the note keeps its
+      // actual held length. Clamp to the previous event so a note shorter
+      // than the shift itself can't invert into a negative duration.
+      const prevT = this.events.length ? this.events[this.events.length - 1].t : 0;
+      t = Math.max(raw + this._lastOnShift, prevT);
+    }
+    // Two events can legitimately land on the same instant; keep both rather
+    // than collapsing the collision, since collapsing through an
     // intermediate 'off' could erase a chord that really was played
     // (on(A), off, on(B) -> just on(B)).
-    this.events.push({ t: this.tempo.quantize(raw), type, notes });
+    this.events.push({ t, type, notes });
   }
 
   stopRecording() {

@@ -6,6 +6,8 @@ import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js
 import { holdKey, releaseKey } from './support/interactions.js';
 import { expectedChordFrequencies } from './support/expected-audio.js';
 import { AudioEngine } from '../js/audio.js';
+import { LoopRecorder } from '../js/loop.js';
+import { Tempo } from '../js/tempo.js';
 
 test.describe('AudioEngine._envelopeValueAt (pure logic, no browser/audio needed)', () => {
   // Regression coverage for audio.js's _releaseNote, which reads the
@@ -38,6 +40,30 @@ test.describe('AudioEngine._envelopeValueAt (pure logic, no browser/audio needed
   test('once decay finishes, the level holds at sustain indefinitely', () => {
     expect(engine._envelopeValueAt(note, 10.3)).toBeCloseTo(0.6, 5);
     expect(engine._envelopeValueAt(note, 50)).toBeCloseTo(0.6, 5);
+  });
+});
+
+test.describe('LoopRecorder note quantizing (pure logic, no browser/audio needed)', () => {
+  // A fake engine driven by a manually-advanced clock, so onset/release
+  // timing can be set precisely instead of racing real audio/JS timing.
+  function makeRecorder(quantizeDivision) {
+    const engine = { ctx: { currentTime: 0 }, voice: 'test-voice', unlock() {}, stopChord() {}, playChord() {} };
+    const recorder = new LoopRecorder(engine, new Tempo(120, quantizeDivision), { enabled: false });
+    return { recorder, engine };
+  }
+
+  test('a short note keeps its actual duration, instead of the release quantizing onto the same instant as the onset', () => {
+    // 1/4 note grid at 120bpm = 0.5s steps.
+    const { recorder, engine } = makeRecorder(4);
+    recorder.startRecording();
+    engine.ctx.currentTime = 0.24; // nearer the 0 grid line than 0.5
+    recorder.recordEvent('on', [60]);
+    engine.ctx.currentTime = 0.26; // a real 20ms note; independently quantized this would also land on 0
+    recorder.recordEvent('off', null);
+
+    const [onEvent, offEvent] = recorder.events;
+    expect(onEvent.t).toBe(0); // onset still snaps to the grid
+    expect(offEvent.t).toBeCloseTo(0.02, 5); // but the held duration survives, not collapsed to 0
   });
 });
 
