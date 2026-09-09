@@ -68,6 +68,19 @@ Or standalone: `npm ci && npx playwright install chromium && npx playwright test
   actual sounding notes.
 - `loop.spec.js` -- record/release starts real looping playback on the real
   clock, live play mixes with it, Clear loop actually stops the scheduler.
+- `octave.spec.js` -- the three effects of `[`/`]` (shift a sounding chord,
+  silently target a chord while held first, shift the global register when
+  no chord's involved), applying to every held chord at once, and the
+  resulting chord-name suffix.
+- `inversion.spec.js` -- `/` cycles a held chord's inversion, remembered per
+  key, reflected in its name, and reinterpreted (not reset) across a variant
+  change that alters the chord's note count.
+- `chord-lock.spec.js` -- `.` locks/updates/clears a variant on a held
+  chord, a locked chord keeps sounding shaped by it once released, and a
+  physically-held variant still overrides a lock live.
+- `playback-modes.spec.js` -- backtick/tap cycles Chord/Bass/Arpeggio/Lead;
+  each mode's note-set or timing, and that a mode switch never rewrites an
+  already-recorded loop.
 - `tempo.spec.js` -- bpm/quantize controls and their effect on recorded
   timing, quantize's grid-collision edge case, loop playback phase-locking
   to a running click, the metronome click itself.
