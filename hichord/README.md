@@ -2,8 +2,12 @@
 
 A browser-based chord instrument, loosely modeled on the [HiChord](https://hichord.shop/pages/manual)
 hardware — see the [repo root README](../README.md#experiment-one-hichord) for
-the original one-paragraph spec, and [`DECISIONS.md`](./DECISIONS.md) for the
-music-theory and implementation choices made while building it.
+the original one-paragraph spec. That spec is the source of truth for
+behavior; where it leaves a detail unspecified, this instrument follows the
+real HiChord's hardware behavior as a tie-breaker (it's what the experiment
+is explicitly modeled on) rather than guessing. Implementation/design
+rationale lives as comments next to the code they explain, not in a separate
+document.
 
 No build step, no dependencies. It's a static page (`index.html` + a few ES
 modules) that runs entirely client-side with the Web Audio API.
@@ -52,11 +56,14 @@ stealing the sound:
 
 **Variants** — hold a grid key *at the same time as* a chord key to reshape
 the held chord; release the variant key to go back to the plain chord.
-Both M7 and 6sus2 depend on the base chord's quality: M7 gives a major 7th
-over a major chord, a minor 7th over a minor chord, and a half-diminished
-(m7♭5) over the diminished vii° chord; 6sus2 gives a 6th chord over a major
-degree (I, IV, V) but a sus2 over a minor or diminished one (ii, iii, vi,
-vii°):
+Three of these depend on the base chord's quality rather than overriding it:
+Mm flip swaps major⟷minor third (keeping the 5th); M7 gives a major 7th over
+a major chord, a minor 7th over a minor chord, and a half-diminished (m7♭5)
+over the diminished vii° chord; 6sus2 gives a 6th chord over a major degree
+(I, IV, V) but a sus2 over a minor or diminished one (ii, iii, vi, vii°). The
+rest (aug, dom7, dim, sus4, 9) always give the same shape regardless of the
+base chord's quality — if a variant doesn't sound like what you expected,
+this is the first thing to check.
 
 |     | Q: Dreamy — aug | W: Inverted — Mm flip | E: Bluesy — dom7 |
 |---|---|---|---|
@@ -111,9 +118,8 @@ hold the same way keys do.
 `make check` runs the Playwright integration test suite (real browser, real
 Web Audio) covering chords, variants, key/voice switching, and the loop
 recorder. See [`tests/README.md`](tests/README.md) for what's covered and
-[`DECISIONS.md`](./DECISIONS.md#automated-testing) for why. These don't
-replace the manual smoke test below -- they don't cover cross-browser
-behavior or touch-specific quirks.
+why. These don't replace the manual smoke test below -- they don't cover
+cross-browser behavior or touch-specific quirks.
 
 ## Manual smoke test
 
@@ -185,3 +191,8 @@ audio before a user gesture), not a bug.
 - Loop recorder captures one loop at a time; no overdub/multi-track layering
   (you can play live over the loop, but that play isn't added into it).
 - No persistence — reloading the page resets key/voice/loop/tempo/quantize.
+- No octave-shift control (the real HiChord has one on its joystick; this
+  experiment's spec doesn't call for one).
+- No MIDI I/O.
+- No on-screen bar-count control — loop length is whatever you actually
+  played, snapped to the nearest beat, not a fixed number of bars.

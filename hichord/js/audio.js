@@ -7,6 +7,11 @@
 // since there's still just one variant/joystick control shaping "whatever's
 // currently held" as a single sound.
 
+// Direct Web Audio oscillators/envelopes, no synthesis library -- the sound
+// palette here (a few detuned oscillators through a low-pass filter with an
+// ADSR-ish envelope) is simple enough that a dependency would add more
+// weight than value. Soft Pad is the default (a little attack/decay, per
+// the top-level README's spec).
 export const VOICES = [
   {
     name: 'Soft Pad',

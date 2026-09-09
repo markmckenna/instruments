@@ -143,6 +143,10 @@ function toggleRecord(down) {
 }
 
 // --- Keyboard ---------------------------------------------------------
+// Physical-position based (event.code, not event.key), so the control
+// scheme is independent of OS keyboard layout/language and shift/caps
+// state, and matches the on-screen layout (described by physical key
+// position) rather than characters typed.
 
 window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
@@ -153,6 +157,10 @@ window.addEventListener('keydown', (e) => {
     case 'ArrowRight': e.preventDefault(); changeKey(1); break;
     case 'ArrowUp': e.preventDefault(); changeVoice(1); break;
     case 'ArrowDown': e.preventDefault(); changeVoice(-1); break;
+    // Space, not Tab: Tab can be intercepted by browser/OS focus-cycling
+    // accessibility features (e.g. macOS's Full Keyboard Access) before the
+    // page ever sees the keydown -- silently breaking recording, not just
+    // stealing focus. Space doesn't carry that meaning anywhere on this page.
     case 'Space': e.preventDefault(); toggleRecord(true); break;
   }
 });

@@ -34,6 +34,13 @@ export class LoopRecorder {
 
   recordEvent(type, notes) {
     if (this.state !== 'recording') return;
+    // `notes` is always the *complete* set sounding at this instant (input.js's
+    // refreshSound() passes currentSound()'s full merged list), not a delta --
+    // so on playback, each event can go through the same playChord()
+    // reconciliation live play does (see audio.js), and a pitch shared between
+    // one event and the next just keeps sounding across them instead of
+    // retriggering. Playback reproduces live play's per-note independence
+    // rather than approximating it.
     const raw = this.engine.ctx.currentTime - this._recordStart;
     // Quantize to the shared Tempo's grid (default: nearest 32nd note) --
     // "just on loops": this only ever touches what gets *recorded*, so live

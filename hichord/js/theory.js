@@ -103,7 +103,10 @@ export const VARIANTS = {
   KeyC: { label: '9', mood: 'Lush', offsets: () => [0, 4, 7, 10, 14], suffix: () => '9' },
 };
 
-// Row-major layout of the grid above, for building the on-screen 3x3 UI.
+// Row-major layout of the grid above, for building the on-screen 3x3 UI --
+// mirrors the real HiChord's 3x3 joystick directions (Q=up-left, S=center,
+// C=down-right, etc.), the tie-breaker used for anything the top-level
+// README's spec left unspecified.
 export const VARIANT_GRID = [
   ['KeyQ', 'KeyW', 'KeyE'],
   ['KeyA', 'KeyS', 'KeyD'],

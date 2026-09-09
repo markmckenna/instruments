@@ -1,6 +1,6 @@
 // Tempo (bpm + quantize grid, shared by the loop recorder and the
-// metronome click -- see DECISIONS.md "Tempo, click track, and quantize")
-// and its on-screen controls.
+// metronome click -- see tempo.js's module comment) and its on-screen
+// controls.
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
 import { Tempo } from '../js/tempo.js';
@@ -94,8 +94,9 @@ test('rapid chord changes at a coarse quantize grid record every chord, none sil
 }) => {
   // Coarsen to 1/4 -- collisions onto the same quantized instant are common
   // here, which is exactly where a prior "coalesce same-instant events" fix
-  // (since reverted, see DECISIONS.md) could silently erase a chord that
-  // was genuinely played by replacing it with whatever came right after.
+  // (since reverted, see loop.js's recordEvent comment) could silently erase
+  // a chord that was genuinely played by replacing it with whatever came
+  // right after.
   await page.click('[data-action="quantize-down"]');
   await page.click('[data-action="quantize-down"]');
   await page.click('[data-action="quantize-down"]');

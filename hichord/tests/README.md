@@ -1,8 +1,17 @@
 # HiChord integration tests
 
 Automated tests that drive the real app in a real browser (Playwright +
-Chromium) -- real DOM, real keyboard/pointer events, real Web Audio. See
-`../DECISIONS.md` ("Automated testing") for why Playwright and why now.
+Chromium) -- real DOM, real keyboard/pointer events, real Web Audio. Added
+once the app's logic (polyphony, per-note independence across variant/key/
+chord-button changes, loop scheduling, the blur/visibility panic valve) grew
+past what a manual smoke test alone catches reliably (see `../../PROCESS.md`
+"Validation approach"). No audio or DOM framework needed changing to add
+tests: Playwright drives the real static page in a real browser over
+`python3 -m http.server` (same server the app already uses), so the tests
+exercise the actual `input.js`/`audio.js`/`loop.js`/`theory.js` code paths
+rather than a mocked stand-in. Chromium only for now (not also WebKit/
+Safari) to keep CI-less local runs fast; cross-browser behavior stays on the
+manual checklist in `../README.md`.
 
 ## Run them
 

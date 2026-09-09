@@ -1,8 +1,8 @@
 // Computes the frequencies HiChord's audio engine *should* produce for a
 // given chord, using the app's own pure theory/audio math (no DOM, no Web
 // Audio -- both modules are safe to import directly under Node) rather than
-// a hand-copied table. If DECISIONS.md's chord/variant math ever changes,
-// these expectations move with it automatically.
+// a hand-copied table. If theory.js's chord/variant math ever changes, these
+// expectations move with it automatically.
 import { buildChord } from '../../js/theory.js';
 import { VOICES } from '../../js/audio.js';
 
@@ -57,10 +57,9 @@ export function expectedMergedFrequencies(keyPc, degreeIndices, variantCode, voi
 /**
  * Expected start/stop oscillator events for a transition between two held
  * MIDI note sets on the same voice, mirroring AudioEngine.playChord()'s
- * exact-pitch diff (see DECISIONS.md "Every note voiced independently"): a
- * pitch present both before and after keeps sounding untouched -- no start,
- * no stop -- only pitches that dropped out stop, and only pitches that are
- * newly wanted start.
+ * exact-pitch diff: a pitch present both before and after keeps sounding
+ * untouched -- no start, no stop -- only pitches that dropped out stop, and
+ * only pitches that are newly wanted start.
  */
 export function expectedTransition(beforeNotes, afterNotes, voiceIndex = 0) {
   const before = new Set(beforeNotes);

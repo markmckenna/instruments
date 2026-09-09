@@ -1,8 +1,9 @@
 # PROCESS.md
 
 Repo-wide process decisions that apply across instruments. Instrument-specific
-decisions live in each instrument's own `DECISIONS.md` — see `AGENTS.md` for
-the split.
+decisions live with what they explain — a code comment for a technical
+choice, a README section for a user-facing one — see `AGENTS.md` ("Decisions
+live with their subject") for the split.
 
 ## Repo structure
 
@@ -13,8 +14,8 @@ the split.
   the number of instruments is small.
 - A `shared/` directory will be introduced the first time two instruments
   actually need the same logic, not before. When that happens, record it
-  here (what moved, why, which instruments consume it) and in the
-  `DECISIONS.md` of each affected instrument.
+  here (what moved, why, which instruments consume it) and as a comment in
+  the promoted code itself.
 
 ## Tooling
 
@@ -50,11 +51,11 @@ the split.
   changes, in real or emulated Chrome + Safari, desktop + mobile.
 - Add automated tests per-instrument once its logic (audio scheduling, chord
   theory, timing) grows complex enough that manual testing stops being
-  reliable, and note the tooling choice in that instrument's `DECISIONS.md`
-  (see `AGENTS.md`). First instance: `hichord` (Playwright integration tests
-  driving the real page in a real browser; `hichord/DECISIONS.md`
-  "Automated testing", `hichord/tests/README.md`). Reach for the same
-  tooling for the next instrument unless it has a concrete reason not to.
+  reliable, and note the tooling choice in that instrument's
+  `tests/README.md`. First instance: `hichord` (Playwright integration tests
+  driving the real page in a real browser; `hichord/tests/README.md`). Reach
+  for the same tooling for the next instrument unless it has a concrete
+  reason not to.
 - `node --check` on each JS module remains a cheap syntax-error guard
   regardless of whether an instrument has a test suite yet.
 - Every `make check` (root and each instrument's own) follows the same

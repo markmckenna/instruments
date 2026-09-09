@@ -1,5 +1,5 @@
 // Keyboard-specific behavior that the mouse-driven tests elsewhere don't
-// exercise: OS key-repeat must not re-trigger (DECISIONS.md / input.js's
+// exercise: OS key-repeat must not re-trigger (input.js's
 // `if (e.repeat) return`), and the blur/visibility "panic" safety valve must
 // release everything if the tab loses focus mid-hold.
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';

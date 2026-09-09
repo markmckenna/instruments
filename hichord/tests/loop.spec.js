@@ -1,14 +1,15 @@
 // Loop recorder: hold Space to record, release to start looping playback,
 // Clear loop drops it. Real timing (no fake clock) since the scheduler
-// (loop.js) drives itself off the real AudioContext clock via setInterval --
-// see DECISIONS.md "Loop recorder" for why.
+// (loop.js) drives itself off the real AudioContext clock via setInterval,
+// per its own module comment -- so the tests do too, rather than faking it.
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
 import { AudioEngine } from '../js/audio.js';
 
 test.describe('AudioEngine._envelopeValueAt (pure logic, no browser/audio needed)', () => {
-  // Regression coverage for DECISIONS.md's "Release reads the envelope
-  // analytically, not AudioParam.value" -- the bug that made some (not all)
+  // Regression coverage for audio.js's _releaseNote comment ("Release reads
+  // the envelope analytically, not AudioParam.value") -- the bug that made
+  // some (not all)
   // loop playouts decay to silence early: releasing a note before its
   // attack/decay finished used to read the *live* gain value (correct only
   // at real "now"), which was stale for a release scheduled ahead on the
@@ -74,12 +75,11 @@ test('recording a note then releasing Space loops it, and Clear loop stops it', 
   await expect(loopDisplay).toHaveText('Recording…');
 
   // Release Space *while J is still held* -- the recorded chord's 'on' event
-  // has no matching 'off' within the recording. Per DECISIONS.md ("Recording
-  // stopped mid-hold gets a synthetic release at the loop boundary"),
-  // stopRecording() appends a synthetic 'off' right at the loop length
-  // instead of leaving it dangling, so the note sounds for (almost) the
-  // entire loop -- which also makes "is the loop voice currently sounding"
-  // deterministic enough for the Clear-loop assertion below.
+  // has no matching 'off' within the recording. Per loop.js's stopRecording()
+  // comment, it appends a synthetic 'off' right at the loop length instead of
+  // leaving it dangling, so the note sounds for (almost) the entire loop --
+  // which also makes "is the loop voice currently sounding" deterministic
+  // enough for the Clear-loop assertion below.
   await holdKey(page, 'j');
   await page.waitForTimeout(150);
   await releaseKey(page, 'Space');

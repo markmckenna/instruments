@@ -48,7 +48,7 @@ export class Metronome {
    * scheduler (LoopRecorder, when starting playback) phase-align its own
    * start to the click instead of anchoring to an arbitrary real moment
    * (whenever a key happened to be released) that drifts independently of
-   * it -- see DECISIONS.md "Loop playback phase-locks to a running click".
+   * it -- see loop.js's _startScheduler().
    */
   nearestBeatTime(ctxTime) {
     const beatsSinceStart = (ctxTime - this._startCtxTime) / this.tempo.beatSeconds;

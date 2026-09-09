@@ -1,9 +1,9 @@
-// Chord variants (the QWE/ASD/ZXC grid). Covers both documented behaviors
-// from DECISIONS.md:
-//   - "Every note voiced independently, by exact pitch": changing the held
-//     variant while a chord is held reconciles the sounding notes by exact
-//     MIDI pitch -- a pitch shared before and after keeps sounding untouched,
-//     only the pitches that actually changed stop/start.
+// Chord variants (the QWE/ASD/ZXC grid). Covers both:
+//   - Every note voiced independently, by exact pitch (see audio.js's
+//     playChord): changing the held variant while a chord is held reconciles
+//     the sounding notes by exact MIDI pitch -- a pitch shared before and
+//     after keeps sounding untouched, only the pitches that actually changed
+//     stop/start.
 // and the variant math itself (quality-dependent variants like M7/Mm flip
 // behaving differently over a major vs. minor vs. diminished base chord).
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';

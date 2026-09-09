@@ -1,6 +1,6 @@
 // Chord buttons: holding one sounds its root-position diatonic triad and
 // lights up; releasing stops it cleanly; holding several at once overlays
-// them into one combined chord (DECISIONS.md "Polyphonic chord buttons").
+// them into one combined chord (see input.js's currentSound()).
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdButtonByMouse, releaseMouse, holdKey, releaseKey } from './support/interactions.js';
 import {
