@@ -58,16 +58,20 @@ over a major chord, a minor 7th over a minor chord, and a half-diminished
 degree (I, IV, V) but a sus2 over a minor or diminished one (ii, iii, vi,
 vii°):
 
-|     | Q: aug | W: Mm flip | E: dom7 |
+|     | Q: Dreamy — aug | W: Inverted — Mm flip | E: Bluesy — dom7 |
 |---|---|---|---|
-|     | A: dim | S: neutral | D: M7 |
-|     | Z: 6sus2 | X: sus4 | C: 9 |
+|     | A: Dark — dim | S: Base — neutral | D: Jazzy — M7 |
+|     | Z: Sweet — 6sus2 | X: Open — sus4 | C: Lush — 9 |
 
-While exactly one chord button is held, the variant grid relabels to show
-the actual chord each one would produce (e.g. holding `J` shows the M7
-button as "Cmaj7"); while a variant is held, the chord grid relabels the
+Each variant button shows three things: its key letter, a fixed one-word
+"mood" naming the grid position itself (Dreamy/Inverted/Bluesy/Dark/Base/
+Jazzy/Sweet/Open/Lush, always the same regardless of what's held), and
+underneath that, what it currently reads — normally its plain description
+(the table above), but while exactly one chord button is held, the actual
+chord each variant would produce instead (e.g. holding `J` shows the M7
+button as "Cmaj7"). Hold a variant instead and the chord grid relabels the
 same way in reverse, showing what each chord button would produce with it.
-Both revert to their plain/static labels the moment that's ambiguous (no
+Both revert to their plain/static reading the moment that's ambiguous (no
 chord held, or two-or-more chord buttons held at once).
 
 **Now playing** — below the variant grid, the exact notes currently

@@ -251,6 +251,11 @@ button {
   font-size: 0.65rem;
   color: var(--text-dim);
 }
+.variant-btn .variant-mood {
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--text-dim);
+}
 .variant-btn .variant-name {
   font-size: 0.85rem;
   font-weight: 600;
@@ -266,7 +271,8 @@ button {
   color: var(--key-text-active);
   transform: scale(0.96);
 }
-.variant-btn.active .key-letter {
+.variant-btn.active .key-letter,
+.variant-btn.active .variant-mood {
   color: var(--key-text-active);
   opacity: 0.7;
 }

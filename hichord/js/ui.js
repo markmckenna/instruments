@@ -28,6 +28,8 @@ export function renderUI({ key, voice, heldBases, heldVariant, loopState, bpm, q
     heldBases.length === 1 ? CHORD_KEYS.findIndex((k) => k.code === heldBases[0]) : null;
   document.querySelectorAll('[data-variant]').forEach((el) => {
     const code = el.dataset.variant;
+    const moodEl = el.querySelector('.variant-mood');
+    if (moodEl) moodEl.textContent = VARIANTS[code].mood; // fixed per grid position, never changes with held state
     const nameEl = el.querySelector('.variant-name');
     if (nameEl) {
       nameEl.textContent =

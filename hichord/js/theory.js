@@ -62,28 +62,35 @@ export const QUALITY_SUFFIX = { maj: '', min: 'm', dim: '°' };
 // is the matching chord-symbol suffix for display (see variantChordName) --
 // kept alongside `offsets` rather than derived from it, since a couple of
 // variants (6sus2, M7) change *shape* by quality in a way a generic
-// interval-to-symbol mapping would have to special-case anyway.
+// interval-to-symbol mapping would have to special-case anyway. `mood` is
+// a fixed, evocative one-word name for the grid position itself (how it
+// feels to reach for, not what it technically does) -- shown on the button
+// alongside the key letter and whatever `suffix` currently reads.
 export const VARIANTS = {
-  KeyQ: { label: 'aug', offsets: () => [0, 4, 8], suffix: () => 'aug' },
+  KeyQ: { label: 'aug', mood: 'Dreamy', offsets: () => [0, 4, 8], suffix: () => 'aug' },
   KeyW: {
     label: 'Mm flip',
+    mood: 'Inverted',
     offsets: (q) => (q === 'maj' ? [0, 3, 7] : [0, 4, 7]),
     suffix: (q) => (q === 'maj' ? 'm' : ''), // flips to the *other* triad quality
   },
-  KeyE: { label: 'dom7', offsets: () => [0, 4, 7, 10], suffix: () => '7' },
-  KeyA: { label: 'dim', offsets: () => [0, 3, 6], suffix: () => '°' },
+  KeyE: { label: 'dom7', mood: 'Bluesy', offsets: () => [0, 4, 7, 10], suffix: () => '7' },
+  KeyA: { label: 'dim', mood: 'Dark', offsets: () => [0, 3, 6], suffix: () => '°' },
   KeyS: {
     label: 'neutral',
+    mood: 'Base',
     offsets: (q) => (q === 'maj' ? [0, 4, 7] : q === 'min' ? [0, 3, 7] : [0, 3, 6]),
     suffix: (q) => QUALITY_SUFFIX[q], // unmodified -- same suffix the plain triad already uses
   },
   KeyD: {
     label: 'M7',
+    mood: 'Jazzy',
     offsets: (q) => (q === 'maj' ? [0, 4, 7, 11] : q === 'min' ? [0, 3, 7, 10] : [0, 3, 6, 10]),
     suffix: (q) => (q === 'maj' ? 'maj7' : q === 'min' ? 'm7' : 'm7♭5'),
   },
   KeyZ: {
     label: '6sus2',
+    mood: 'Sweet',
     // Major degrees (I, IV, V) get a 6th chord (add6, 3rd kept); minor and
     // diminished degrees (ii, iii, vi, vii°) get a sus2 (3rd replaced by the
     // 2nd) instead -- two different, quality-picked shapes under one button,
@@ -92,8 +99,8 @@ export const VARIANTS = {
     offsets: (q) => (q === 'maj' ? [0, 4, 7, 9] : [0, 2, 7]),
     suffix: (q) => (q === 'maj' ? '6' : 'sus2'),
   },
-  KeyX: { label: 'sus4', offsets: () => [0, 5, 7], suffix: () => 'sus4' },
-  KeyC: { label: '9', offsets: () => [0, 4, 7, 10, 14], suffix: () => '9' },
+  KeyX: { label: 'sus4', mood: 'Open', offsets: () => [0, 5, 7], suffix: () => 'sus4' },
+  KeyC: { label: '9', mood: 'Lush', offsets: () => [0, 4, 7, 10, 14], suffix: () => '9' },
 };
 
 // Row-major layout of the grid above, for building the on-screen 3x3 UI.

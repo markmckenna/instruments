@@ -391,6 +391,15 @@ they are below.
   special-case 6sus2 and M7 anyway (their *shape*, not just their name,
   depends on quality), so there's no real generality to gain by deriving the
   suffix from the interval list instead of just stating it directly.
+- **Each variant button shows three things, in order: key letter, mood,
+  then the current reading**: `key-letter` (Q/W/E/...), `variant-mood`
+  (Dreamy/Inverted/Bluesy/Dark/Base/Jazzy/Sweet/Open/Lush, in grid order —
+  fixed, evocative one-word names for the grid position itself, provided
+  directly rather than derived), then `variant-name` (the dynamic-or-static
+  reading described above). `mood` lives in `VARIANTS` alongside `label`/
+  `offsets`/`suffix` — one more fact about a grid position, not a separate
+  table to keep in sync. Unlike `variant-name`, it never changes with held
+  state: it names the *position*, not what it's currently doing.
 - **The now-playing panel is a diagnostic, not a decorative flourish**: it
   shows the exact MIDI notes currently sounding on the `'live'` voice, named
   in scientific pitch notation (`theory.js`'s `midiName`, e.g. "C4") — a way

@@ -8,7 +8,22 @@
 // data source with (input.js's currentSound()).
 import { test, expect } from './support/fixtures.js';
 import { holdKey, releaseKey, holdButtonByMouse, releaseMouse } from './support/interactions.js';
-import { variantChordName } from '../js/theory.js';
+import { VARIANT_GRID, VARIANTS, variantChordName } from '../js/theory.js';
+
+test('every variant button shows its fixed mood name, in grid order, regardless of held state', async ({
+  page,
+}) => {
+  for (const row of VARIANT_GRID) {
+    for (const code of row) {
+      await expect(page.locator(`[data-variant="${code}"] .variant-mood`)).toHaveText(VARIANTS[code].mood);
+    }
+  }
+
+  // Unaffected by the dynamic .variant-name relabeling right next to it.
+  await holdKey(page, 'j');
+  await expect(page.locator('[data-variant="KeyD"] .variant-mood')).toHaveText('Jazzy');
+  await releaseKey(page, 'j');
+});
 
 test.describe('variant grid relabels while one chord is held', () => {
   test('shows what each variant would actually produce, then reverts once released', async ({ page }) => {
