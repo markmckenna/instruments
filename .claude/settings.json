@@ -1,0 +1,16 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": false,
+    "network": {
+      "allowLocalBinding": true
+    },
+    "permissions": {
+      "ask": [
+        "Bash(dangerouslyDisableSandbox:true)"
+      ],
+      "blockReadsOutsideWorkingDirectories": true
+    }
+  }
+}
