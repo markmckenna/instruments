@@ -16,6 +16,7 @@ export class LoopRecorder {
     this.state = 'idle'; // 'idle' | 'recording' | 'playing'
     this.events = []; // { t: secondsFromLoopStart, type: 'on' | 'off', notes }
     this.loopLength = 0;
+    this.voice = null; // the engine voice preset in effect when this recording was made -- see startRecording()
     this._recordStart = 0;
     this._timer = null;
     this._loopStartCtxTime = 0;
@@ -26,10 +27,14 @@ export class LoopRecorder {
   startRecording() {
     this._stopScheduler();
     this.engine.unlock(); // ensures ctx exists even if nothing has sounded yet (see AudioEngine.unlock)
-    this.engine.stopChord('loop'); // don't leave whatever the old loop last triggered ringing forever
+    this.engine.stopChord('loop', undefined, this.voice); // don't leave whatever the old loop last triggered ringing forever, released in *its* voice
     this.events = [];
     this.state = 'recording';
     this._recordStart = this.engine.ctx.currentTime;
+    // Pin this recording to whatever voice is selected right now, so cycling
+    // voices later (while this loop plays, or before the next one) reshapes
+    // only live playing -- the loop keeps sounding the way it was recorded.
+    this.voice = this.engine.voice;
   }
 
   recordEvent(type, notes) {
@@ -95,13 +100,13 @@ export class LoopRecorder {
   /** Stop looping playback (keeps the recorded events, use clear() to drop them). */
   stopPlaying() {
     this._stopScheduler();
-    this.engine.stopChord('loop'); // see startRecording() above
+    this.engine.stopChord('loop', undefined, this.voice); // see startRecording() above
     if (this.state === 'playing') this.state = 'idle';
   }
 
   clear() {
     this._stopScheduler();
-    this.engine.stopChord('loop'); // see startRecording() above
+    this.engine.stopChord('loop', undefined, this.voice); // see startRecording() above
     this.state = 'idle';
     this.events = [];
     this.loopLength = 0;
@@ -169,7 +174,7 @@ export class LoopRecorder {
   // Scheduling ahead (within LOOKAHEAD) and letting Web Audio's own clock
   // trigger the note is what "the standard lookahead pattern" actually means.
   _fireEvent(ev, when) {
-    if (ev.type === 'on') this.engine.playChord('loop', ev.notes, when);
-    else this.engine.stopChord('loop', when);
+    if (ev.type === 'on') this.engine.playChord('loop', ev.notes, when, this.voice);
+    else this.engine.stopChord('loop', when, this.voice);
   }
 }

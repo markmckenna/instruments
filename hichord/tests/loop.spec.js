@@ -4,6 +4,7 @@
 // per its own module comment -- so the tests do too, rather than faking it.
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
+import { expectedChordFrequencies } from './support/expected-audio.js';
 import { AudioEngine } from '../js/audio.js';
 
 test.describe('AudioEngine._envelopeValueAt (pure logic, no browser/audio needed)', () => {
@@ -154,6 +155,35 @@ test('tapping Space while a loop is playing cancels and clears it, not just stop
   await page.waitForTimeout(1200);
   const afterTap = (await audioEventsSince(page, afterMark)).filter((e) => e.type === 'start');
   expect(afterTap).toHaveLength(0); // scheduler is actually stopped, not just hidden by the UI
+});
+
+test('cycling voices after recording reshapes live play but not the loop already laid down', async ({ page }) => {
+  await holdKey(page, 'Space');
+  await holdKey(page, 'j');
+  await page.waitForTimeout(150);
+  await releaseKey(page, 'Space');
+  await releaseKey(page, 'j');
+
+  // Switch voice *after* the loop was recorded (default voice at record time
+  // was Soft Pad, voiceIndex 0).
+  await page.click('[data-action="voice-next"]');
+  await expect(page.locator('[data-display="voice"]')).toHaveText('Pluck');
+
+  // Loop length is 0.5s (one beat at 120bpm, see the loop-length test above);
+  // 1.2s spans more than one replay, so dedupe before comparing -- it's the
+  // *set* of frequencies used that must match Soft Pad, not the count.
+  const mark = await markAudio(page);
+  await page.waitForTimeout(1200);
+  const replayed = [
+    ...new Set(
+      (await audioEventsSince(page, mark))
+        .filter((e) => e.type === 'start')
+        .map((e) => e.freq),
+    ),
+  ].sort((a, b) => a - b);
+  expect(replayed).toEqual(expectedChordFrequencies(0, 0, 'neutral', 0)); // still Soft Pad -- the voice in effect when it was recorded, not the now-current Pluck
+
+  await page.click('[data-action="clear-loop"]');
 });
 
 test('a chord held live keeps sounding on top of loop playback', async ({ page }) => {

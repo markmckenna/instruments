@@ -253,8 +253,13 @@ export class AudioEngine {
    * playback timing comes from Web Audio's own sample-accurate clock rather
    * than from whenever the calling JS happens to run (see loop.js). Live
    * input (input.js) never passes it, so it defaults to "now".
+   *
+   * `voice` lets a caller pin which voice preset sounds this call instead of
+   * whatever's currently selected on the engine -- loop.js passes the preset
+   * that was current when the loop was *recorded*, so cycling voices while a
+   * loop plays reshapes only new live playing, not the loop already laid down.
    */
-  playChord(voiceId, midiNotes, when) {
+  playChord(voiceId, midiNotes, when, voice = this.voice) {
     this.unlock();
     const t = when ?? this.ctx.currentTime;
     const existing = this.active.get(voiceId) || [];
@@ -267,20 +272,21 @@ export class AudioEngine {
     // not once per button, so that pitch's loudness doesn't stack.
     const toAdd = midiNotes.filter((m, i) => !already.has(m) && midiNotes.indexOf(m) === i);
 
-    drop.forEach((note) => this._releaseNote(note, this.voice.release, t));
-    const added = toAdd.map((m) => this._playNote(m, this.voice, t, midiNotes.length));
+    drop.forEach((note) => this._releaseNote(note, voice.release, t));
+    const added = toAdd.map((m) => this._playNote(m, voice, t, midiNotes.length));
     this.active.set(voiceId, keep.concat(added));
   }
 
   /**
-   * Release whatever's sounding on `voiceId`, using the current voice
-   * preset's natural release. `when` schedules this for a precise future
-   * audio-clock time instead of right now -- see playChord() above.
+   * Release whatever's sounding on `voiceId`, using `voice`'s natural release
+   * (defaulting to whatever's currently selected on the engine). `when`
+   * schedules this for a precise future audio-clock time instead of right
+   * now -- see playChord() above for both params.
    */
-  stopChord(voiceId, when) {
+  stopChord(voiceId, when, voice = this.voice) {
     if (!this.ctx || !this.active.has(voiceId)) return;
     const t = when ?? this.ctx.currentTime;
-    this.active.get(voiceId).forEach((note) => this._releaseNote(note, this.voice.release, t));
+    this.active.get(voiceId).forEach((note) => this._releaseNote(note, voice.release, t));
     this.active.delete(voiceId);
   }
 
