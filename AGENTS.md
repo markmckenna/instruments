@@ -68,10 +68,15 @@ affected.
 - An instrument with automated validations supports `make check` standalone
   (not `test` -- `check` is the standard name for "run all automated
   validations"), and the root `make check` runs every instrument's (skip
-  instruments with none). `./validate.sh` at the repo root wraps `make check`
-  in a strict contract (exit 0 and print exactly `PASSED` on success,
-  details + next steps on failure) for anything that needs an unambiguous
-  pass/fail signal.
+  instruments with none). Every `make check`, at every level, follows the
+  same strict contract directly (see `~/.claude/CLAUDE.md` "Validation"):
+  exit 0 and print exactly `PASSED` on success; on failure, print
+  diagnostics specific enough to localize the problem and save the full
+  output to a file (named in the failure text). Nontrivial validation logic
+  lives in that level's own `tools/check.sh`, which the Makefile's `check`
+  target just calls -- see `tools/check.sh` (root) and
+  `hichord/tools/check.sh` for the pattern to follow when adding another
+  instrument's.
 - `run` should be self-sufficient: serve the directory locally and open it
   in the default browser, blocking in the foreground so `Ctrl+C` cleanly
   stops the server.

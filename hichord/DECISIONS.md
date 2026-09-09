@@ -455,6 +455,16 @@ they are below.
   has zero dependencies and no build step; only the test runner is a
   dependency, and only for developers who run `make check`.
 - See `tests/README.md` for what's covered and how to run them.
+- **`make check` wraps Playwright in `tools/check.sh`**, following the
+  repo-wide validator contract (see `~/.claude/CLAUDE.md` "Validation" and
+  `../PROCESS.md`): `PASSED` only on success (Playwright's own verbose
+  per-test listing is captured to `build/check.log` but not shown); on
+  failure, that listing is relayed in full rather than summarized, since
+  Playwright's own failure blocks already name the exact file:line and an
+  expected/actual diff, plus (since `playwright.config.js` sets `trace:
+  'retain-on-failure'`) a `trace.zip` to step through — already the specific
+  diagnostic the contract asks for, so summarizing it further would only
+  lose information.
 
 ## Not built (deliberately out of scope for this pass)
 

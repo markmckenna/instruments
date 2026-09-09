@@ -13,9 +13,10 @@ whenever a concept is added or removed (see `~/.claude/CLAUDE.md`
 - **Cross-cutting process decisions** — repo structure, tooling defaults,
   Make command backbone, port registry, validation approach, git workflow.
   [`PROCESS.md`](PROCESS.md)
-- **Root command backbone** — `make <instrument>` runs an instrument,
-  `make check` runs every instrument's automated validations;
-  `./validate.sh` wraps that in a strict pass/fail contract. [`Makefile`](Makefile), [`validate.sh`](validate.sh)
+- **Root command backbone** — `make <instrument>` runs an instrument;
+  `make check` runs every instrument's automated validations in a strict
+  PASSED/failure contract (see `~/.claude/CLAUDE.md` "Validation").
+  [`Makefile`](Makefile), [`tools/check.sh`](tools/check.sh)
 
 ## HiChord (`hichord/`)
 

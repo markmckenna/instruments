@@ -7,8 +7,10 @@
 #   make check        # run every instrument's automated validations (where it has any)
 #   make help         # this message
 #
-# `make check` is also reachable via `./validate.sh` at the repo root, which
-# wraps it in the exit-code/PASSED contract other tooling can rely on.
+# `make check` is the strict-contract entrypoint (see ~/.claude/CLAUDE.md
+# "Validation"): exit 0 and print exactly `PASSED` on success, or exit
+# nonzero with diagnostics + a saved log on failure. tools/check.sh
+# implements that; this target just calls it.
 
 INSTRUMENTS := hichord
 
@@ -27,7 +29,7 @@ list:
 	@echo "$(INSTRUMENTS)"
 
 check:
-	@for i in $(INSTRUMENTS); do $(MAKE) -C $$i check || exit 1; done
+	@bash tools/check.sh
 
 $(INSTRUMENTS):
 	@$(MAKE) -C $@ run

@@ -57,6 +57,15 @@ the split.
   tooling for the next instrument unless it has a concrete reason not to.
 - `node --check` on each JS module remains a cheap syntax-error guard
   regardless of whether an instrument has a test suite yet.
+- Every `make check` (root and each instrument's own) follows the same
+  strict contract directly -- see `~/.claude/CLAUDE.md` "Validation": exit
+  0/nonzero, print exactly `PASSED` on success, and on failure print
+  diagnostics specific enough to localize the problem plus save the full
+  output to a file (named in the failure text). Nontrivial validation logic
+  lives in that level's own `tools/check.sh`, which `make check` just calls
+  -- see `tools/check.sh` (root, a collection: runs every instrument's
+  `make check` and suppresses their individual PASSEDs into its own one) and
+  `hichord/tools/check.sh` (a leaf: wraps Playwright) for the pattern.
 
 ## Git workflow
 

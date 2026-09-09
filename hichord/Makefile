@@ -3,7 +3,9 @@
 # Usage:
 #   make run     Serve HiChord locally and open it in the default browser
 #   make stop    Kill a server left running from a backgrounded `make run`
-#   make check   Run the automated integration tests (see tests/README.md)
+#   make check   Run the automated integration tests (see tests/README.md).
+#                Strict PASSED/failure contract, see tools/check.sh and
+#                ~/.claude/CLAUDE.md "Validation".
 
 PORT ?= 4173
 URL := http://localhost:$(PORT)
@@ -29,4 +31,4 @@ node_modules: package.json
 	@touch node_modules
 
 check: node_modules
-	@npx playwright test
+	@bash tools/check.sh

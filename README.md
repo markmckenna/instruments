@@ -10,7 +10,7 @@ Experimenting with digital musical instruments
 - Arrows left/right switch keys (ordered by circle of fifths); arrows up/down switch voices
   - default voicing has a little bit of attack/decay
 - 3x3 grid of letters `QWE-ASD-ZXC` provide chord variants while held (in order: augmented, Mm flip, dom7, dim, neutral, M7, 6sus2, sus4, 9)
-- Hold tab to record a loop; release to continue the loop (snap to tempo, 120bpm)
+- Hold space to record a loop; release to continue the loop (snap to tempo, 120bpm)
 
 **Implementation:** [`hichord/`](hichord/README.md) — run it with `make hichord` from the repo root.
 
