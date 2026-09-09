@@ -19,5 +19,5 @@ echo "$output"
 echo
 echo "FAILED: \`make check\` exited $status."
 echo "Re-run \`make check\` (or, for one instrument, \`cd <instrument> && make check\`) to see the full output above again."
-echo "Each instrument's tests/README.md (where it has one) explains what's covered; DECISIONS.md explains why."
+echo "Each instrument's tests/README.md (where it has one) explains what's covered."
 exit "$status"

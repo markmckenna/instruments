@@ -190,7 +190,21 @@ button {
 .chord-btn[data-base="KeyP"] { grid-area: p; }
 .chord-btn[data-base="Semicolon"] { grid-area: semi; }
 
+/* Shared between chord and variant buttons. Tucked in the lower-right
+   corner, out of the vertical stack of text that actually describes what
+   the button does -- a keyboard hint to glance at, not a label implying
+   the key code is itself part of what the button means. */
+.key-letter {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.35rem;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  opacity: 0.6;
+}
+
 .chord-btn {
+  position: relative;
   background: var(--key-face);
   border-radius: 0.7rem;
   display: flex;
@@ -199,10 +213,6 @@ button {
   justify-content: center;
   gap: 0.1rem;
   transition: background 60ms ease, transform 60ms ease;
-}
-.chord-btn .key-letter {
-  font-size: 0.65rem;
-  color: var(--text-dim);
 }
 .chord-btn .degree {
   font-size: 0.7rem;
@@ -238,18 +248,16 @@ button {
 }
 
 .variant-btn {
+  position: relative;
   background: var(--key-face);
   border-radius: 0.7rem;
   padding: 0.6rem 0.3rem;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0.15rem;
   transition: background 60ms ease, transform 60ms ease;
-}
-.variant-btn .key-letter {
-  font-size: 0.65rem;
-  color: var(--text-dim);
 }
 .variant-btn .variant-mood {
   font-size: 0.7rem;

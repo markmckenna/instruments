@@ -367,6 +367,14 @@ they are below.
   shipping hardware edition). Exact photos of the device's chord-button
   coloring weren't available at the time of writing, so those buttons stay a
   neutral single color (as before) rather than guessing per-button colors.
+- **The key letter is a corner hint, not part of the vertical stack**: on
+  both chord and variant buttons, `.key-letter` is absolutely positioned in
+  the lower-right corner (one shared rule, since both buttons need the same
+  treatment) rather than sitting at the top of the flex column alongside
+  the text that actually describes what the button does. It's there for
+  someone glancing at the physical keyboard to confirm which key is which,
+  not meant to read as load-bearing information the way the chord/variant
+  name, degree, or mood is.
 
 ## Dynamic labeling and the now-playing panel
 
