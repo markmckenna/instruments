@@ -7,14 +7,11 @@ import { holdKey, releaseKey } from './support/interactions.js';
 import { AudioEngine } from '../js/audio.js';
 
 test.describe('AudioEngine._envelopeValueAt (pure logic, no browser/audio needed)', () => {
-  // Regression coverage for audio.js's _releaseNote comment ("Release reads
-  // the envelope analytically, not AudioParam.value") -- the bug that made
-  // some (not all)
-  // loop playouts decay to silence early: releasing a note before its
-  // attack/decay finished used to read the *live* gain value (correct only
-  // at real "now"), which was stale for a release scheduled ahead on the
-  // audio clock. _envelopeValueAt must reproduce whatever _playNote's own
-  // ramps would produce at any given time, independent of the real clock.
+  // Regression coverage for audio.js's _releaseNote, which reads the
+  // envelope analytically (via this method) rather than AudioParam.value --
+  // see its comment for why. _envelopeValueAt must reproduce whatever
+  // _playNote's own ramps would produce at any given time, independent of
+  // the real clock.
   const engine = new AudioEngine();
   const note = {
     attackStart: 10,
@@ -44,12 +41,9 @@ test.describe('AudioEngine._envelopeValueAt (pure logic, no browser/audio needed
 });
 
 test('holding the record key with a chord held actually records events', async ({ page }) => {
-  // Dedicated, minimal regression test: a prior session reported "the loop
-  // doesn't record at all" (later suspected to be a stale-cache artifact,
-  // see README.md's hard-reload note -- but worth guarding directly either
-  // way). This asserts recorder.events/state directly rather than only
-  // inferring "it must have recorded something" from the UI classes the
-  // more thorough test below also checks.
+  // Asserts recorder.events/state directly rather than only inferring "it
+  // must have recorded something" from the UI classes the more thorough
+  // test below also checks.
   await holdKey(page, 'Space');
   await holdKey(page, 'j');
   await page.waitForTimeout(120);

@@ -28,7 +28,7 @@ export class Metronome {
 
   enable() {
     if (this.enabled) return;
-    this.engine.unlock(); // idempotent; ensures ctx exists even if nothing has sounded yet
+    this.engine.unlock(); // ensures ctx exists even if nothing has sounded yet (see AudioEngine.unlock)
     this.enabled = true;
     this._startCtxTime = this.engine.ctx.currentTime;
     this._nextBeat = 0;

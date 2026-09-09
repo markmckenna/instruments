@@ -115,6 +115,8 @@ export class AudioEngine {
 
   // Must be triggered from within a user-gesture handler (keydown/pointerdown),
   // otherwise iOS/macOS Safari will keep the context suspended indefinitely.
+  // Idempotent (a no-op once this.ctx exists), so callers can call it
+  // defensively just to ensure the context exists.
   unlock() {
     if (!this.ctx) {
       const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -166,9 +168,7 @@ export class AudioEngine {
     filter.frequency.value = voice.filterHz;
     // Normalize by how many notes are in *this* chord, not a fixed level --
     // otherwise a wide voicing (e.g. the 5-note "9" variant) sums to several
-    // times the amplitude of a plain triad. This, combined with the master
-    // gain/limiter above, is what fixes the clipping: previously every note
-    // played at full gain regardless of how many were stacked underneath it.
+    // times the amplitude of a plain triad.
     const level = 1 / Math.sqrt(Math.max(1, chordSize));
     const noteGain = ctx.createGain();
     noteGain.gain.setValueAtTime(0, when);
@@ -213,8 +213,7 @@ export class AudioEngine {
    * short blip). A bandpassed noise burst around 10-12kHz rather than a
    * pitched oscillator: that's the register a click actually needs to cut
    * through and read as a percussive "tick" instead of a low, easily-masked
-   * tone (an earlier version used a ~90Hz oscillator, which turned out to
-   * be nearly inaudible on typical speakers).
+   * tone.
    */
   playClick(when) {
     this.unlock();
@@ -292,11 +291,8 @@ export class AudioEngine {
     // LOOKAHEAD (see loop.js) in the *future* relative to real "now" when
     // this runs, so .value (which only reflects "now") would be stale for
     // any note whose attack/decay hasn't finished by the time this is
-    // called -- cancelScheduledValues(at) + setValueAtTime(stale value, at)
-    // would then snap the gain to a wrong, too-low value right as the curve
-    // was still climbing, an audible drop that could look like "the note
-    // already decayed to zero" on whichever playouts happened to be short
-    // enough for this to bite.
+    // called, snapping the gain to a wrong, too-low value right as the curve
+    // was still climbing.
     gain.gain.cancelScheduledValues(at);
     gain.gain.setValueAtTime(this._envelopeValueAt(note, at), at);
     gain.gain.linearRampToValueAtTime(0.0001, at + releaseTime);

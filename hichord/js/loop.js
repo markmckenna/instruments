@@ -25,7 +25,7 @@ export class LoopRecorder {
 
   startRecording() {
     this._stopScheduler();
-    this.engine.unlock(); // idempotent; ensures ctx exists even if nothing has sounded yet
+    this.engine.unlock(); // ensures ctx exists even if nothing has sounded yet (see AudioEngine.unlock)
     this.engine.stopChord('loop'); // don't leave whatever the old loop last triggered ringing forever
     this.events = [];
     this.state = 'recording';
@@ -46,18 +46,11 @@ export class LoopRecorder {
     // "just on loops": this only ever touches what gets *recorded*, so live
     // play is never snapped, only what a loop plays back. Two events can
     // legitimately land on the same quantized instant (playing faster than
-    // the grid resolves, or a coarse grid, e.g. 1/4) -- a prior version
-    // "coalesced" those by replacing the earlier one, on the theory that a
-    // same-instant attack-then-release is inaudible anyway (see
-    // AudioEngine._envelopeValueAt: it evaluates to exactly 0 right at its
-    // own attackStart, so the cancelled attack was never actually silent
-    // *incorrectly*, just silent). But collapsing through an *intermediate*
-    // 'off' this way could erase an entire chord that really was played --
-    // on(A), off, on(B) all landing on one instant coalesced down to just
-    // on(B), silently dropping A from the recording, worse at coarser grids
-    // where collisions are common. Simplest correct fix: keep every event.
-    // A same-instant attack+release pair is harmless (mathematically
-    // silent, just a couple of wasted oscillator nodes), which is a far
+    // the grid resolves, or a coarse grid, e.g. 1/4); keep every event
+    // rather than collapsing same-instant collisions, since collapsing
+    // through an intermediate 'off' can erase a chord that really was
+    // played (on(A), off, on(B) -> just on(B)). A same-instant attack+
+    // release pair is harmless (mathematically silent), which is a far
     // smaller cost than ever losing a note outright.
     this.events.push({ t: this.tempo.quantize(raw), type, notes });
   }
@@ -70,18 +63,14 @@ export class LoopRecorder {
     }
     const rawLength = this.engine.ctx.currentTime - this._recordStart;
     // Snap to the *nearest* beat, even if that rounds shorter than what was
-    // actually played. Rounding up unconditionally (the previous behavior --
-    // an earlier attempt at "nearest" here still always rounded up too, by
-    // construction, it just did it in a roundabout way) tacks on up to
-    // almost a full beat of dead air at the loop's tail on every single
-    // recording, and that overshoot is *the loop length itself* -- it
-    // compounds on every repeat, which is why played-back loops felt
-    // increasingly behind an external tempo the longer they played, not just
-    // "off by a fixed amount". Rounding down instead just clips whatever's
+    // actually played. Rounding up unconditionally would tack on up to
+    // almost a full beat of dead air at the loop's tail on every recording,
+    // and since that overshoot is *the loop length itself*, it compounds on
+    // every repeat -- the loop would drift further behind an external tempo
+    // the longer it played. Rounding down instead just clips whatever's
     // still sounding at the boundary a little early (at most a quarter
-    // beat) -- generally well after its attack/decay has already settled
-    // into a steady sustain by then, so it's inaudible, unlike the silence
-    // rounding up used to add every cycle.
+    // beat) -- generally well after its attack/decay has settled into a
+    // steady sustain by then, so it's inaudible.
     const beats = Math.max(1, Math.round(rawLength / this.tempo.beatSeconds));
     this.loopLength = beats * this.tempo.beatSeconds;
     // No event may land beyond the loop it's meant to play within, or it
@@ -106,13 +95,13 @@ export class LoopRecorder {
   /** Stop looping playback (keeps the recorded events, use clear() to drop them). */
   stopPlaying() {
     this._stopScheduler();
-    this.engine.stopChord('loop'); // release whatever the loop last triggered, don't let it ring forever
+    this.engine.stopChord('loop'); // see startRecording() above
     if (this.state === 'playing') this.state = 'idle';
   }
 
   clear() {
     this._stopScheduler();
-    this.engine.stopChord('loop'); // same as stopPlaying(): don't leave the last-triggered note stuck sounding
+    this.engine.stopChord('loop'); // see startRecording() above
     this.state = 'idle';
     this.events = [];
     this.loopLength = 0;

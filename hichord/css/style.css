@@ -5,11 +5,10 @@
    Settings" button, a yellow "Sounds & Effects" button, and a red "Modes &
    Tempo" button, which map onto our Key control, Voice control, and
    loop/record control (a mode) respectively (see the `.control-group`
-   rules below for how Tempo/Quantize fit in too). Blue is the general
-   highlight/active color, after "Cosmic Blue" (the currently-shipping
-   hardware edition). Exact photos of the device's chord-button coloring
-   weren't available at the time of writing, so those stay a neutral single
-   color rather than guessing per-button ones. */
+   rules below for how Tempo/Quantize fit in too). Exact photos of the
+   device's chord-button coloring weren't available at the time of writing,
+   so those stay a neutral single color rather than guessing per-button
+   ones. */
 :root {
   color-scheme: dark;
   --bg: #14161c;

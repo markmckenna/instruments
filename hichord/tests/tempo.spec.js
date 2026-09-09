@@ -93,10 +93,9 @@ test('rapid chord changes at a coarse quantize grid record every chord, none sil
   page,
 }) => {
   // Coarsen to 1/4 -- collisions onto the same quantized instant are common
-  // here, which is exactly where a prior "coalesce same-instant events" fix
-  // (since reverted, see loop.js's recordEvent comment) could silently erase
-  // a chord that was genuinely played by replacing it with whatever came
-  // right after.
+  // here, which is exactly where silently dropping a note on collision
+  // (see loop.js's recordEvent comment) would erase a chord that was
+  // genuinely played.
   await page.click('[data-action="quantize-down"]');
   await page.click('[data-action="quantize-down"]');
   await page.click('[data-action="quantize-down"]');
