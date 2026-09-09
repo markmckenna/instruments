@@ -1,10 +1,9 @@
 // Computes the frequencies HiChord's audio engine *should* produce for a
 // given chord, using the app's own pure theory/audio math (no DOM, no Web
 // Audio -- both modules are safe to import directly under Node) rather than
-// a hand-copied table. If theory.js's chord/variant math ever changes, these
-// expectations move with it automatically.
-import { buildChord } from '../../js/theory.js';
-import { VOICES } from '../../js/audio.js';
+// a hand-copied table. If theory.js's chord/variant shapes or audio.js's
+// buildChord ever change, these expectations move with them automatically.
+import { buildChord, VOICES } from '../../js/audio.js';
 
 // Node's V8 and the Chromium build Playwright drives compute Math.pow a few
 // ULPs apart, so comparing raw floats against what the browser's probe
@@ -33,25 +32,25 @@ function expandToOscillatorFrequencies(midiNotes, voiceIndex) {
 }
 
 /** MIDI notes for one held chord button + variant. */
-export function chordMidiNotes(keyPc, degreeIndex, variantCode) {
-  return buildChord(keyPc, degreeIndex, variantCode);
+export function chordMidiNotes(keyPc, degreeIndex, variantId) {
+  return buildChord(keyPc, degreeIndex, variantId);
 }
 
 /** MIDI notes for several chord buttons held at once, deduped (see input.js's currentSound()). */
-export function mergedMidiNotes(keyPc, degreeIndices, variantCode) {
+export function mergedMidiNotes(keyPc, degreeIndices, variantId) {
   const notes = new Set();
-  degreeIndices.forEach((d) => buildChord(keyPc, d, variantCode).forEach((n) => notes.add(n)));
+  degreeIndices.forEach((d) => buildChord(keyPc, d, variantId).forEach((n) => notes.add(n)));
   return Array.from(notes);
 }
 
 /** Expected oscillator frequencies for one held chord button + variant. */
-export function expectedChordFrequencies(keyPc, degreeIndex, variantCode, voiceIndex = 0) {
-  return expandToOscillatorFrequencies(chordMidiNotes(keyPc, degreeIndex, variantCode), voiceIndex);
+export function expectedChordFrequencies(keyPc, degreeIndex, variantId, voiceIndex = 0) {
+  return expandToOscillatorFrequencies(chordMidiNotes(keyPc, degreeIndex, variantId), voiceIndex);
 }
 
 /** Expected oscillator frequencies for several chord buttons held at once. */
-export function expectedMergedFrequencies(keyPc, degreeIndices, variantCode, voiceIndex = 0) {
-  return expandToOscillatorFrequencies(mergedMidiNotes(keyPc, degreeIndices, variantCode), voiceIndex);
+export function expectedMergedFrequencies(keyPc, degreeIndices, variantId, voiceIndex = 0) {
+  return expandToOscillatorFrequencies(mergedMidiNotes(keyPc, degreeIndices, variantId), voiceIndex);
 }
 
 /**

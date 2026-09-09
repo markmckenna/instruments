@@ -2,20 +2,21 @@
 // relabels to show what each variant would actually do to it; while a
 // variant is held, the chord grid relabels to show what each chord button
 // would actually produce with it. Both fall back to their static labels
-// (VARIANTS[code].label for variants, the plain diatonic triad name for
+// (VARIANTS[id].label for variants, the plain diatonic triad name for
 // chords) whenever there's no single unambiguous chord/variant to compute
 // against. Also covers the "now playing" notes diagnostic these share a
 // data source with (input.js's currentSound()).
 import { test, expect } from './support/fixtures.js';
 import { holdKey, releaseKey, holdButtonByMouse, releaseMouse } from './support/interactions.js';
-import { VARIANT_GRID, VARIANTS, variantChordName } from '../js/theory.js';
+import { VARIANTS, variantChordName } from '../js/theory.js';
+import { VARIANT_GRID, VARIANT_KEYS } from '../js/input.js';
 
 test('every variant button shows its fixed mood name, in grid order, regardless of held state', async ({
   page,
 }) => {
   for (const row of VARIANT_GRID) {
     for (const code of row) {
-      await expect(page.locator(`[data-variant="${code}"] .variant-mood`)).toHaveText(VARIANTS[code].mood);
+      await expect(page.locator(`[data-variant="${code}"] .variant-mood`)).toHaveText(VARIANTS[VARIANT_KEYS[code]].mood);
     }
   }
 
@@ -29,9 +30,9 @@ test.describe('variant grid relabels while one chord is held', () => {
   test('shows what each variant would actually produce, then reverts once released', async ({ page }) => {
     await holdKey(page, 'j'); // degree 0, I, major triad (C)
 
-    await expect(page.locator('[data-variant="KeyQ"] .variant-name')).toHaveText(variantChordName(0, 0, 'KeyQ'));
-    await expect(page.locator('[data-variant="KeyD"] .variant-name')).toHaveText(variantChordName(0, 0, 'KeyD'));
-    await expect(page.locator('[data-variant="KeyZ"] .variant-name')).toHaveText(variantChordName(0, 0, 'KeyZ'));
+    await expect(page.locator('[data-variant="KeyQ"] .variant-name')).toHaveText(variantChordName(0, 0, 'aug'));
+    await expect(page.locator('[data-variant="KeyD"] .variant-name')).toHaveText(variantChordName(0, 0, 'm7'));
+    await expect(page.locator('[data-variant="KeyZ"] .variant-name')).toHaveText(variantChordName(0, 0, 'sixSus2'));
 
     await releaseKey(page, 'j');
     await expect(page.locator('[data-variant="KeyQ"] .variant-name')).toHaveText('aug');
@@ -57,9 +58,9 @@ test.describe('chord grid relabels while a variant is held', () => {
   test('shows the actual chord each button would produce, then reverts once released', async ({ page }) => {
     await holdKey(page, 'd'); // M7
 
-    await expect(page.locator('[data-base="KeyJ"] .chord-name')).toHaveText(variantChordName(0, 0, 'KeyD')); // Cmaj7
-    await expect(page.locator('[data-base="KeyI"] .chord-name')).toHaveText(variantChordName(0, 1, 'KeyD')); // Dm7
-    await expect(page.locator('[data-base="Semicolon"] .chord-name')).toHaveText(variantChordName(0, 6, 'KeyD')); // Bm7♭5
+    await expect(page.locator('[data-base="KeyJ"] .chord-name')).toHaveText(variantChordName(0, 0, 'm7')); // Cmaj7
+    await expect(page.locator('[data-base="KeyI"] .chord-name')).toHaveText(variantChordName(0, 1, 'm7')); // Dm7
+    await expect(page.locator('[data-base="Semicolon"] .chord-name')).toHaveText(variantChordName(0, 6, 'm7')); // Bm7♭5
 
     await releaseKey(page, 'd');
     await expect(page.locator('[data-base="KeyJ"] .chord-name')).toHaveText('C');

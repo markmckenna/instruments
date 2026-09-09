@@ -29,7 +29,7 @@ test('losing window focus mid-hold releases the chord (blur panic)', async ({ pa
   await expect(btn).not.toHaveClass(/active/);
 
   const stopped = (await audioEventsSince(page, mark)).filter((e) => e.type === 'stop');
-  expect(stopped.length).toEqual(expectedChordFrequencies(0, 0, 'KeyS').length);
+  expect(stopped.length).toEqual(expectedChordFrequencies(0, 0, 'neutral').length);
 
   // key is still physically "down" as far as the OS is concerned in this
   // test, but the app's held-state was cleared -- release it so it doesn't
@@ -50,7 +50,7 @@ test('the tab going hidden mid-hold releases the chord (visibilitychange panic)'
   await expect(btn).not.toHaveClass(/active/);
 
   const stopped = (await audioEventsSince(page, mark)).filter((e) => e.type === 'stop');
-  expect(stopped.length).toEqual(expectedChordFrequencies(0, 0, 'KeyS').length);
+  expect(stopped.length).toEqual(expectedChordFrequencies(0, 0, 'neutral').length);
 
   await releaseKey(page, 'j');
 });

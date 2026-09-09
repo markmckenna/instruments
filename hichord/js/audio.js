@@ -12,6 +12,44 @@
 // ADSR-ish envelope) is simple enough that a dependency would add more
 // weight than value. Soft Pad is the default (a little attack/decay, per
 // the top-level README's spec).
+
+// MIDI is this module's concern, not theory.js's: theory.js's DEGREES/
+// VARIANTS describe chord *shape* in the abstract (scale degrees, semitone
+// offsets from a root); turning that into actual MIDI note numbers and
+// pitch names is audio-side math, alongside _freqFor below.
+import { DEGREES, VARIANTS, NEUTRAL_VARIANT, pcName } from './theory.js';
+
+/** Scientific pitch notation for a MIDI note number, e.g. 60 -> "C4". */
+export function midiName(midi) {
+  const octave = Math.floor(midi / 12) - 1;
+  return pcName(midi) + octave;
+}
+
+/**
+ * Build the sounding chord for a held chord button + held variant, as MIDI
+ * note numbers -- the bridge from theory.js's abstract chord-degree/variant
+ * shapes to concrete pitches this engine can play.
+ * @param {number} keyPc pitch class of the current key's root (0-11)
+ * @param {number} degreeIndex index into theory.js's DEGREES (0-6)
+ * @param {string} variantId an id in theory.js's VARIANTS (defaults to the neutral/center one)
+ * @param {number} baseMidi MIDI note the key root is anchored near
+ * @returns {number[]} MIDI note numbers, root first
+ */
+export function buildChord(keyPc, degreeIndex, variantId, baseMidi = 60) {
+  const degree = DEGREES[degreeIndex];
+  const variant = VARIANTS[variantId] || VARIANTS[NEUTRAL_VARIANT];
+  const offsets = variant.offsets(degree.quality);
+  // No modulo here (unlike chordRootName's pitch-class-only naming in
+  // theory.js): DEGREES' intervals are 0-11 and already strictly increasing
+  // with degree index, so anchoring the root at baseMidi + keyPc + interval
+  // (rather than wrapping back into a single octave band) guarantees the
+  // tonic (interval 0) is always the lowest-rooted chord for the current
+  // key, and each further degree in the JIKOLP; sequence sits higher than
+  // the last.
+  const rootMidi = baseMidi + keyPc + degree.interval;
+  return offsets.map((o) => rootMidi + o);
+}
+
 export const VOICES = [
   {
     name: 'Soft Pad',

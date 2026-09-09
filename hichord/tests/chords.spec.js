@@ -9,7 +9,7 @@ import {
   expectedChordFrequencies,
   expectedTransition,
 } from './support/expected-audio.js';
-import { CHORD_KEYS } from '../js/theory.js';
+import { CHORD_KEYS } from '../js/input.js';
 
 test.describe('chord buttons (key of C, default voice)', () => {
   for (const [degreeIndex, { code, label }] of CHORD_KEYS.entries()) {
@@ -24,7 +24,7 @@ test.describe('chord buttons (key of C, default voice)', () => {
         .filter((e) => e.type === 'start')
         .map((e) => e.freq)
         .sort((a, b) => a - b);
-      expect(started).toEqual(expectedChordFrequencies(0, degreeIndex, 'KeyS'));
+      expect(started).toEqual(expectedChordFrequencies(0, degreeIndex, 'neutral'));
 
       const releaseMark = await markAudio(page);
       await releaseMouse(page);
@@ -43,8 +43,8 @@ test.describe('chord buttons (key of C, default voice)', () => {
     // support/interactions.js for why this beats a fabricated second pointer.
     await holdKey(page, 'j');
 
-    const jOnly = chordMidiNotes(0, 0, 'KeyS');
-    const merged = mergedMidiNotes(0, [0, 3], 'KeyS');
+    const jOnly = chordMidiNotes(0, 0, 'neutral');
+    const merged = mergedMidiNotes(0, [0, 3], 'neutral');
     const { started: mergeStarted, stopped: mergeStopped } = expectedTransition(jOnly, merged);
 
     const mergeMark = await markAudio(page);

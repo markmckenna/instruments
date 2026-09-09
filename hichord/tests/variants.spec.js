@@ -18,8 +18,8 @@ test.describe('variants', () => {
   test('a variant that only changes one note (Mm flip) only stops/starts that note', async ({ page }) => {
     await holdKey(page, 'j'); // degree 0, I, major triad
 
-    const before = chordMidiNotes(0, 0, 'KeyS');
-    const after = chordMidiNotes(0, 0, 'KeyW'); // Mm flip: major<->minor third, still a triad
+    const before = chordMidiNotes(0, 0, 'neutral');
+    const after = chordMidiNotes(0, 0, 'mmFlip'); // Mm flip: major<->minor third, still a triad
     const { started, stopped } = expectedTransition(before, after);
 
     const mark = await markAudio(page);
@@ -38,8 +38,8 @@ test.describe('variants', () => {
   }) => {
     await holdKey(page, 'j'); // 3-note major triad
 
-    const before = chordMidiNotes(0, 0, 'KeyS');
-    const after = chordMidiNotes(0, 0, 'KeyD'); // M7: adds a 4th note, root/3rd/5th unchanged
+    const before = chordMidiNotes(0, 0, 'neutral');
+    const after = chordMidiNotes(0, 0, 'm7'); // M7: adds a 4th note, root/3rd/5th unchanged
     const { started, stopped } = expectedTransition(before, after);
 
     const mark = await markAudio(page);
@@ -57,8 +57,8 @@ test.describe('variants', () => {
   test('M7 depends on the base chord quality: minor degree gets a minor 7th', async ({ page }) => {
     await holdKey(page, 'i'); // degree 1, ii, minor triad
 
-    const before = chordMidiNotes(0, 1, 'KeyS');
-    const after = chordMidiNotes(0, 1, 'KeyD');
+    const before = chordMidiNotes(0, 1, 'neutral');
+    const after = chordMidiNotes(0, 1, 'm7');
     const { started } = expectedTransition(before, after);
 
     const mark = await markAudio(page);
@@ -73,8 +73,8 @@ test.describe('variants', () => {
   test('M7 over the diminished vii° button gives a half-diminished (m7♭5)', async ({ page }) => {
     await holdKey(page, ';'); // degree 6, vii°, diminished triad
 
-    const before = chordMidiNotes(0, 6, 'KeyS');
-    const after = chordMidiNotes(0, 6, 'KeyD');
+    const before = chordMidiNotes(0, 6, 'neutral');
+    const after = chordMidiNotes(0, 6, 'm7');
     const { started } = expectedTransition(before, after);
 
     const mark = await markAudio(page);
@@ -89,8 +89,8 @@ test.describe('variants', () => {
   test('6sus2 gives a 6th chord (3rd kept, 6th added) over a major degree', async ({ page }) => {
     await holdKey(page, 'j'); // degree 0, I, major triad
 
-    const before = chordMidiNotes(0, 0, 'KeyS');
-    const after = chordMidiNotes(0, 0, 'KeyZ');
+    const before = chordMidiNotes(0, 0, 'neutral');
+    const after = chordMidiNotes(0, 0, 'sixSus2');
     const { started } = expectedTransition(before, after);
 
     const mark = await markAudio(page);
@@ -105,8 +105,8 @@ test.describe('variants', () => {
   test('6sus2 gives a sus2 (3rd replaced by 2nd, no 6th) over a minor degree', async ({ page }) => {
     await holdKey(page, 'i'); // degree 1, ii, minor triad
 
-    const before = chordMidiNotes(0, 1, 'KeyS');
-    const after = chordMidiNotes(0, 1, 'KeyZ');
+    const before = chordMidiNotes(0, 1, 'neutral');
+    const after = chordMidiNotes(0, 1, 'sixSus2');
     const { started } = expectedTransition(before, after);
 
     const mark = await markAudio(page);
@@ -121,8 +121,8 @@ test.describe('variants', () => {
   test('6sus2 gives a sus2 over the diminished vii° degree too, not a 6th', async ({ page }) => {
     await holdKey(page, ';'); // degree 6, vii°, diminished triad
 
-    const before = chordMidiNotes(0, 6, 'KeyS');
-    const after = chordMidiNotes(0, 6, 'KeyZ');
+    const before = chordMidiNotes(0, 6, 'neutral');
+    const after = chordMidiNotes(0, 6, 'sixSus2');
     const { started } = expectedTransition(before, after);
 
     const mark = await markAudio(page);
@@ -140,8 +140,8 @@ test.describe('variants', () => {
     await holdKey(page, 'j');
     await holdKey(page, 'w'); // flip to minor
 
-    const before = chordMidiNotes(0, 0, 'KeyW');
-    const after = chordMidiNotes(0, 0, 'KeyS'); // back to plain (neutral) triad
+    const before = chordMidiNotes(0, 0, 'mmFlip');
+    const after = chordMidiNotes(0, 0, 'neutral'); // back to plain (neutral) triad
     const { started, stopped } = expectedTransition(before, after);
 
     const mark = await markAudio(page);

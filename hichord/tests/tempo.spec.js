@@ -120,9 +120,9 @@ test('rapid chord changes at a coarse quantize grid record every chord, none sil
   });
   const recordedNotes = new Set(events.flatMap((e) => e.notes || []));
   const played = [
-    ...chordMidiNotes(0, 0, 'KeyS'), // J
-    ...chordMidiNotes(0, 3, 'KeyS'), // O
-    ...chordMidiNotes(0, 5, 'KeyS'), // P
+    ...chordMidiNotes(0, 0, 'neutral'), // J
+    ...chordMidiNotes(0, 3, 'neutral'), // O
+    ...chordMidiNotes(0, 5, 'neutral'), // P
   ];
   for (const note of played) expect(recordedNotes.has(note)).toBe(true);
 

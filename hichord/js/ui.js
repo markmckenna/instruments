@@ -2,14 +2,16 @@
 // static markup already in index.html (no DOM construction here, so the
 // visual layout lives entirely in HTML/CSS where it's easy to tweak).
 
-import { CHORD_KEYS, VARIANTS, variantChordName, midiName } from './theory.js';
+import { VARIANTS, NEUTRAL_VARIANT, variantChordName } from './theory.js';
+import { midiName } from './audio.js';
+import { CHORD_KEYS, VARIANT_KEYS } from './input.js';
 
 export function renderUI({ key, voice, heldBases, heldVariant, loopState, bpm, quantizeDivision, clickEnabled, playingNotes }) {
   // Whatever's actually shaping the sound right now -- the held variant if
   // one is, otherwise the neutral center one -- same resolution currentSound()
-  // uses in input.js. variantChordName('KeyS', ...) reduces to the plain
-  // diatonic triad name, so this one path covers "nothing held" too.
-  const effectiveVariant = heldVariant || 'KeyS';
+  // uses in input.js. variantChordName(..., NEUTRAL_VARIANT) reduces to the
+  // plain diatonic triad name, so this one path covers "nothing held" too.
+  const effectiveVariant = heldVariant ? VARIANT_KEYS[heldVariant] : NEUTRAL_VARIANT;
 
   document.querySelectorAll('[data-base]').forEach((el) => {
     const code = el.dataset.base;
@@ -28,12 +30,13 @@ export function renderUI({ key, voice, heldBases, heldVariant, loopState, bpm, q
     heldBases.length === 1 ? CHORD_KEYS.findIndex((k) => k.code === heldBases[0]) : null;
   document.querySelectorAll('[data-variant]').forEach((el) => {
     const code = el.dataset.variant;
+    const variantId = VARIANT_KEYS[code];
     const moodEl = el.querySelector('.variant-mood');
-    if (moodEl) moodEl.textContent = VARIANTS[code].mood; // fixed per grid position, never changes with held state
+    if (moodEl) moodEl.textContent = VARIANTS[variantId].mood; // fixed per grid position, never changes with held state
     const nameEl = el.querySelector('.variant-name');
     if (nameEl) {
       nameEl.textContent =
-        singleDegreeIndex === null ? VARIANTS[code].label : variantChordName(key.pc, singleDegreeIndex, code);
+        singleDegreeIndex === null ? VARIANTS[variantId].label : variantChordName(key.pc, singleDegreeIndex, variantId);
     }
     el.classList.toggle('active', code === heldVariant);
   });

@@ -1,12 +1,47 @@
 // Wires keyboard + on-screen (pointer) input to the theory/audio/loop modules,
 // and keeps the UI in sync. This is the only module that holds mutable state.
+// Also the sole owner of physical-key <-> abstract-id mappings (CHORD_KEYS,
+// VARIANT_KEYS/VARIANT_GRID below): keycodes are an input concern, not a
+// music-theory one, so theory.js never sees them.
 
-import { CHORD_KEYS, VARIANTS, CIRCLE_OF_FIFTHS, buildChord } from './theory.js';
-import { AudioEngine } from './audio.js';
+import { CIRCLE_OF_FIFTHS, NEUTRAL_VARIANT } from './theory.js';
+import { AudioEngine, buildChord } from './audio.js';
 import { LoopRecorder } from './loop.js';
 import { Metronome } from './metronome.js';
 import { Tempo } from './tempo.js';
 import { renderUI } from './ui.js';
+
+// The 7 chord buttons, in the physical left-to-right order given in the
+// top-level README ("JIKOLP; produce chords ... in that order, starting with
+// the root"), mapped by index onto theory.js's DEGREES.
+export const CHORD_KEYS = [
+  { code: 'KeyJ', label: 'J' },
+  { code: 'KeyI', label: 'I' },
+  { code: 'KeyK', label: 'K' },
+  { code: 'KeyO', label: 'O' },
+  { code: 'KeyL', label: 'L' },
+  { code: 'KeyP', label: 'P' },
+  { code: 'Semicolon', label: ';' },
+];
+
+// The 3x3 chord-variant grid (README: "QWE-ASD-ZXC provide chord variants
+// while held, in order: augmented, Mm flip, dom7, dim, neutral, M7, 6sus2,
+// sus4, 9"), each physical key mapped onto one of theory.js's VARIANTS ids.
+export const VARIANT_KEYS = {
+  KeyQ: 'aug', KeyW: 'mmFlip', KeyE: 'dom7',
+  KeyA: 'dim', KeyS: 'neutral', KeyD: 'm7',
+  KeyZ: 'sixSus2', KeyX: 'sus4', KeyC: 'ninth',
+};
+
+// Row-major layout of the grid above, for building/testing the on-screen 3x3
+// UI -- mirrors the real HiChord's 3x3 joystick directions (Q=up-left,
+// S=center, C=down-right, etc.), the tie-breaker used for anything the
+// top-level README's spec left unspecified.
+export const VARIANT_GRID = [
+  ['KeyQ', 'KeyW', 'KeyE'],
+  ['KeyA', 'KeyS', 'KeyD'],
+  ['KeyZ', 'KeyX', 'KeyC'],
+];
 
 export const engine = new AudioEngine();
 // Shared by the loop recorder (loop-length rounding, note quantizing) and
@@ -32,7 +67,7 @@ let heldBases = [];
 let heldVariantStack = [];
 
 const BASE_CODES = new Set(CHORD_KEYS.map((k) => k.code));
-const VARIANT_CODES = new Set(Object.keys(VARIANTS));
+const VARIANT_CODES = new Set(Object.keys(VARIANT_KEYS));
 
 // Combines every currently-held chord button into one sound: all of them are
 // built with whatever variant is currently held (there's only one variant
@@ -41,13 +76,14 @@ const VARIANT_CODES = new Set(Object.keys(VARIANTS));
 // before; holding several overlays them into one richer chord.
 function currentSound() {
   if (heldBases.length === 0) return null;
-  const variantCode = heldVariantStack.length ? heldVariantStack[heldVariantStack.length - 1] : 'KeyS';
+  const heldVariantCode = heldVariantStack[heldVariantStack.length - 1];
+  const variantId = heldVariantCode ? VARIANT_KEYS[heldVariantCode] : NEUTRAL_VARIANT;
   const degreeIndices = heldBases.map((code) => CHORD_KEYS.findIndex((k) => k.code === code));
   const noteSet = new Set();
   degreeIndices.forEach((degreeIndex) => {
-    buildChord(CIRCLE_OF_FIFTHS[state.keyIndex].pc, degreeIndex, variantCode).forEach((n) => noteSet.add(n));
+    buildChord(CIRCLE_OF_FIFTHS[state.keyIndex].pc, degreeIndex, variantId).forEach((n) => noteSet.add(n));
   });
-  return { notes: Array.from(noteSet).sort((a, b) => a - b), degreeIndices, variantCode };
+  return { notes: Array.from(noteSet).sort((a, b) => a - b), degreeIndices, variantId };
 }
 
 // Live playing and loop playback are independent engine voices ('live' and
@@ -148,35 +184,48 @@ function toggleRecord(down) {
 // state, and matches the on-screen layout (described by physical key
 // position) rather than characters typed.
 
-window.addEventListener('keydown', (e) => {
-  if (e.repeat) return;
-  if (BASE_CODES.has(e.code)) { e.preventDefault(); pressBase(e.code); return; }
-  if (VARIANT_CODES.has(e.code)) { e.preventDefault(); pressVariant(e.code); return; }
-  switch (e.code) {
-    case 'ArrowLeft': e.preventDefault(); changeKey(-1); break;
-    case 'ArrowRight': e.preventDefault(); changeKey(1); break;
-    case 'ArrowUp': e.preventDefault(); changeVoice(1); break;
-    case 'ArrowDown': e.preventDefault(); changeVoice(-1); break;
-    // Space, not Tab: Tab can be intercepted by browser/OS focus-cycling
-    // accessibility features (e.g. macOS's Full Keyboard Access) before the
-    // page ever sees the keydown -- silently breaking recording, not just
-    // stealing focus. Space doesn't carry that meaning anywhere on this page.
-    case 'Space': e.preventDefault(); toggleRecord(true); break;
-  }
-});
+/**
+ * Wires the keyboard listeners above and the blur/visibility "panic" safety
+ * valve. Deferred behind a function (call once, from app.js) rather than run
+ * at module load, so this module's plain data and logic (CHORD_KEYS,
+ * VARIANT_GRID, currentSound(), etc.) stay safe to import outside a browser
+ * page -- e.g. the test suite imports this module directly under Node for
+ * its expected-value helpers -- without touching `window`/`document` just by
+ * importing it.
+ */
+export function initInput() {
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (BASE_CODES.has(e.code)) { e.preventDefault(); pressBase(e.code); return; }
+    if (VARIANT_CODES.has(e.code)) { e.preventDefault(); pressVariant(e.code); return; }
+    switch (e.code) {
+      case 'ArrowLeft': e.preventDefault(); changeKey(-1); break;
+      case 'ArrowRight': e.preventDefault(); changeKey(1); break;
+      case 'ArrowUp': e.preventDefault(); changeVoice(1); break;
+      case 'ArrowDown': e.preventDefault(); changeVoice(-1); break;
+      // Space, not Tab: Tab can be intercepted by browser/OS focus-cycling
+      // accessibility features (e.g. macOS's Full Keyboard Access) before the
+      // page ever sees the keydown -- silently breaking recording, not just
+      // stealing focus. Space doesn't carry that meaning anywhere on this page.
+      case 'Space': e.preventDefault(); toggleRecord(true); break;
+    }
+  });
 
-window.addEventListener('keyup', (e) => {
-  if (BASE_CODES.has(e.code)) { e.preventDefault(); releaseBase(e.code); return; }
-  if (VARIANT_CODES.has(e.code)) { e.preventDefault(); releaseVariant(e.code); return; }
-  if (e.code === 'Space') { e.preventDefault(); toggleRecord(false); }
-});
+  window.addEventListener('keyup', (e) => {
+    if (BASE_CODES.has(e.code)) { e.preventDefault(); releaseBase(e.code); return; }
+    if (VARIANT_CODES.has(e.code)) { e.preventDefault(); releaseVariant(e.code); return; }
+    if (e.code === 'Space') { e.preventDefault(); toggleRecord(false); }
+  });
 
-// Safety valve: if the tab/window loses focus mid-hold (alt-tab, notification,
-// browser chrome), release everything so no note or recording gets stuck on.
-window.addEventListener('blur', panic);
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) panic();
-});
+  // Safety valve: if the tab/window loses focus mid-hold (alt-tab,
+  // notification, browser chrome), release everything so no note or
+  // recording gets stuck on.
+  window.addEventListener('blur', panic);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) panic();
+  });
+}
+
 function panic() {
   heldBases = [];
   heldVariantStack = [];

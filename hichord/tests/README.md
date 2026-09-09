@@ -33,8 +33,13 @@ Or standalone: `npm ci && npx playwright install chromium && npx playwright test
 - `support/expected-audio.js` computes the frequencies a chord *should*
   produce by importing `js/theory.js` and `js/audio.js` directly (both are
   dependency-free and DOM-free, so they run fine under Node) rather than
-  hand-copying a table of expected notes. If the chord/variant math in
-  `theory.js` changes, the expectations move with it.
+  hand-copying a table of expected notes. If the chord/variant shapes in
+  `theory.js` or `buildChord` in `audio.js` change, the expectations move
+  with them. Specs that need the physical-key layout itself (`CHORD_KEYS`,
+  `VARIANT_GRID`, `VARIANT_KEYS`) import `js/input.js` directly the same
+  way -- its keyboard/DOM wiring is deferred behind `initInput()` rather
+  than run at module load, so importing it for its plain data doesn't
+  require a browser either.
 - `support/interactions.js` holds on-screen buttons with a real mouse and
   physical keys with real keyboard events, rather than fabricating
   `PointerEvent`s -- `input.js` calls `setPointerCapture` unguarded, which
