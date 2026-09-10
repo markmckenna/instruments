@@ -110,10 +110,14 @@ buttons' sound — a quick way to check what's actually playing if something
 doesn't sound quite right.
 
 **Key** — `←` / `→` (or the on-screen arrows) step through all 12 keys in
-circle-of-fifths order.
+circle-of-fifths order. Shown at the top as just its plain name for a
+natural key (e.g. "G"), or both spellings for one that's a sharp/flat (e.g.
+"F♯/G♭") since neither reads as more "correct" out of context — the chord
+buttons themselves always stay on one spelling, since naming one specific
+chord has no such ambiguity to show.
 
 **Voice** — `↑` / `↓` (or the on-screen arrows) cycle through 4 sounds: Soft
-Pad (default), Pluck, Organ, Warm Pad.
+Pad, Pluck, Organ, Warm Pad (default).
 
 **Octave shift** — `[` / `]` (or the on-screen brackets) do one of three
 things depending on what's held:
@@ -141,13 +145,14 @@ variants don't apply — see "Variants" above). Switching mode never changes
 a loop already recorded — a loop always plays back the actual notes it
 captured, whatever mode was live while recording them.
 
-**Bass toggle** — `B` (or the on-screen B button) turns an extra low root on
-or off, independent of playback mode — it layers onto whatever mode is
-already doing rather than being one more mode to cycle through. Always
-anchored in the same low octave regardless of any octave shift on the chord
-above it, so it stays a steady low end no matter how far the chord itself is
-shifted. In Arpeggio mode it sustains continuously rather than joining the
-arpeggiated pattern — the bass note itself is never arpeggiated.
+**Bass toggle** — `B` (or the on-screen B button, on by default) turns an
+extra low root on or off, independent of playback mode — it layers onto
+whatever mode is already doing rather than being one more mode to cycle
+through. Always anchored in the same low octave regardless of any octave
+shift on the chord above it, so it stays a steady low end no matter how far
+the chord itself is shifted. In Arpeggio mode it sustains continuously
+rather than joining the arpeggiated pattern — the bass note itself is never
+arpeggiated.
 
 **Tempo** — `+`/`-` (or the on-screen `+`/`-` buttons) tune the bpm (default
 120, range 40–240); hold either down and it repeats at a fixed rate instead
@@ -155,14 +160,20 @@ of stepping once per press. You can also type a bpm directly into the BPM
 display and press Enter to set it exactly (clicking away without Enter
 reverts to the actual current bpm). The ♩ button (or `\`) toggles a
 metronome click, one per beat, that plays continuously at the current bpm
-regardless of recording/looping — tap it four times in a row at a steady
-pace instead and that's read as a tempo cue: the bpm is set to match your
-tapping instead of just toggling the click on/off.
+regardless of recording/looping; every tap on it also plays one click
+immediately, whichever way it just toggled, so you can always hear the beat
+you're tapping. Tap it four times in a row at a steady pace (80bpm or
+faster — anything slower reads as separate, unrelated toggles rather than a
+deliberate tap) and that's read as a tempo cue instead: the bpm is set to
+match your tapping, and the click is left on so you can hear it confirmed.
 
 **Quantize** — `{`/`}` (Shift + `[`/`]` — or the on-screen `{`/`}` buttons)
 halve/double the quantize grid a recorded note's timing snaps to (default
-1/32 note). This only ever affects what gets *recorded* into a loop — live
-play always sounds exactly when you press, never snapped.
+1/64 note). This only ever affects what gets *recorded* into a loop — live
+play always sounds exactly when you press, never snapped. An arpeggiated
+pattern (see "Playback mode" above) is never snapped to this grid either,
+recorded/looped at its own already-exact timing instead — quantizing it
+would only risk rounding two fast neighboring steps onto the same instant.
 
 **Loop** — hold `Space` (or the on-screen record button) while you play;
 release it and the loop plays back on repeat, snapped to the nearest beat at
@@ -226,9 +237,12 @@ Run through this after any change, in each target browser (see below):
     even click on every beat (not a low thud, easy to miss), continuing
     whether or not you're recording/looping. Change the BPM while it's
     clicking — the click should retime to match, and the BPM display should
-    update too. Tap the ♩ button four times in a row at a steady pace — the
-    BPM display should jump to match your tapping instead of just toggling
-    the click on/off each time.
+    update too. Toggle it off — you should still hear one immediate click
+    right as it turns off, not silence. Tap the ♩ button four times in a row
+    at a steady pace (about a beat a second or faster) — the BPM display
+    should jump to match your tapping and the click should be left on;
+    repeat the four taps noticeably slower than one every 0.75s — the BPM
+    should stay put, just toggling the click on/off like a normal tap.
 13. Hold `+` down — the BPM should climb continuously after a short pause,
     not just once per press; release and it should stop immediately at
     whatever it reached. Same with `-` and with the on-screen `+`/`-`
@@ -236,6 +250,7 @@ Run through this after any change, in each target browser (see below):
     number, and press Enter — it should jump to exactly that value; type a
     different number and click elsewhere without pressing Enter — it should
     snap back to the actual current BPM instead of keeping the typed one.
+    Check a 3-digit BPM (e.g. 240) displays in full, not truncated.
 14. Record a loop holding a chord for a couple of beats, release cleanly —
     on repeated playouts the note should hold and release the same way
     every time (no playout randomly cutting to silence early). Record a loop
@@ -251,7 +266,8 @@ Run through this after any change, in each target browser (see below):
     release it and the grid goes back to plain triad names. The "now
     playing" notes below the variant grid should update to match whatever's
     actually sounding as you do this, including the root doubled an octave
-    up (e.g. holding `J` alone should show "C4 E4 G4 C5").
+    up and (bass defaults on) the bass root an octave down (e.g. holding `J`
+    alone should show "C2 C4 E4 G4 C5").
 17. Hold `J`, tap `/` twice — the button should relabel "C/2i" and the
     voicing should audibly change each tap without a click/pop. Release and
     hold `J` again — the inversion should still be "/2i" (it's remembered
@@ -275,11 +291,21 @@ Run through this after any change, in each target browser (see below):
     short loop in Arpeggio mode, switch to Chord mode, and play it back —
     the loop should still play the arpeggiated pattern it was recorded
     with, unaffected by the mode switch.
-21. Toggle Bass on (`B` or the on-screen B button) and hold `J` — you should
-    hear an extra low root under the triad. Shift `J`'s octave up/down while
+21. Bass is on by default — hold `J` and you should already hear an extra
+    low root under the triad (see #16). Shift `J`'s octave up/down while
     holding it — the low root should stay put, not follow the shift. Switch
     to Arpeggio mode and hold `J` — the bass note should hold steady while
     the rest of the chord cycles one note at a time, not join the pattern.
+    Toggle Bass off (`B` or the on-screen B button) — the low root should
+    drop out; toggle it back on to restore it.
+22. Change key with `→` until the display shows an accidental (e.g. "F♯/G♭",
+    6 steps from C) — both spellings should show, joined by "/"; step to a
+    natural key (e.g. "G") and it should go back to just the one name. Chord
+    button labels stay on a single spelling throughout.
+23. Set the BPM near the top of its range (e.g. 240), switch to Arpeggio
+    mode, and record a loop holding a chord for a couple of seconds — on
+    every repeat, every arpeggiated note should attack cleanly with no
+    clipped or missing steps, even at that fast a tempo.
 
 ## Browser support
 
