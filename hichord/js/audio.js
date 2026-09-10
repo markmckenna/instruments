@@ -105,6 +105,21 @@ const KEY_TRACK_REFERENCE_MIDI = 60;
 // distinct rolled values accumulate forever.
 const EFFECT_CACHE_LIMIT = 16;
 
+// Diagnostics for the Airy-Pad/Chrome-only note-lockup under investigation:
+// load the page with `?audioDebug` in the URL (or set
+// `window.HICHORD_AUDIO_DEBUG = true` before the engine starts) to turn on
+// a console trail of every note attack and reverb node built, an
+// AudioContext statechange/resume-failure watcher, and a live engine
+// reference at `window.__hichordAudio` for poking at `.ctx.state`/`.active`/
+// `._debugCounts` from the console at the exact moment playback cuts out.
+// Silent (and free) otherwise.
+const AUDIO_DEBUG =
+  typeof window !== 'undefined' &&
+  (window.HICHORD_AUDIO_DEBUG || new URLSearchParams(window.location.search).has('audioDebug'));
+function debugLog(...args) {
+  if (AUDIO_DEBUG) console.log('[HiChord audio]', ...args);
+}
+
 /**
  * Get `key` from `cache` (a Map used as an LRU), building and storing it via
  * `build()` on a miss. A hit is moved to the end of `cache`'s iteration
@@ -159,6 +174,15 @@ export class AudioEngine {
     this.active = new Map(); // voiceId -> array of sounding notes (see _playNote), one entry per polyphonic voice
     this._reverbImpulseCache = new Map(); // decaySeconds (rounded, ms) -> AudioBuffer, see _reverbImpulse
     this._distortionCurveCache = new Map(); // amount (rounded) -> Float32Array, see distortionCurve
+    this._debugCounts = { notesAttacked: 0, convolversCreated: 0 }; // see AUDIO_DEBUG above
+    if (AUDIO_DEBUG) {
+      window.__hichordAudio = this;
+      // A safety net for "nothing in the console" reports specifically --
+      // catches anything thrown or rejected anywhere on the page, not just
+      // the spots already wrapped above/below, tagged so it's easy to find.
+      window.addEventListener('error', (e) => console.error('[HiChord audio] uncaught error:', e.error, this._debugSnapshot()));
+      window.addEventListener('unhandledrejection', (e) => console.error('[HiChord audio] unhandled rejection:', e.reason, this._debugSnapshot()));
+    }
   }
 
   // Must be triggered from within a user-gesture handler (keydown/pointerdown),
@@ -192,8 +216,34 @@ export class AudioEngine {
       this.clickBuffer = this.ctx.createBuffer(1, size, this.ctx.sampleRate);
       const data = this.clickBuffer.getChannelData(0);
       for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+
+      if (AUDIO_DEBUG) {
+        this.ctx.addEventListener('statechange', () => console.warn('[HiChord audio] ctx.state ->', this.ctx.state, this._debugSnapshot()));
+        // ctx.state can stay 'running' even if the render thread has
+        // actually stalled -- watch currentTime's real advancement rate
+        // directly instead of trusting state alone.
+        let lastTime = this.ctx.currentTime;
+        setInterval(() => {
+          const now = this.ctx.currentTime;
+          debugLog(`watchdog: currentTime advanced ${(now - lastTime).toFixed(3)}s in the last 0.5s`, this._debugSnapshot());
+          lastTime = now;
+        }, 500);
+      }
     }
-    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx.state === 'suspended') {
+      const resumed = this.ctx.resume();
+      if (AUDIO_DEBUG) resumed.catch((err) => console.error('[HiChord audio] ctx.resume() rejected:', err));
+    }
+  }
+
+  /** See AUDIO_DEBUG above -- also reachable live from the console as `__hichordAudio._debugSnapshot()`. */
+  _debugSnapshot() {
+    return {
+      ...this._debugCounts,
+      ctxState: this.ctx?.state,
+      ctxCurrentTime: this.ctx?.currentTime,
+      activeNotes: Array.from(this.active.values()).reduce((sum, notes) => sum + notes.length, 0),
+    };
   }
 
   get voice() {
@@ -371,9 +421,16 @@ export class AudioEngine {
    * sample file is needed just to add reverb.
    */
   _createReverbNode(effect, destination) {
-    const convolver = this.ctx.createConvolver();
-    convolver.buffer = this._reverbImpulse(this._resolveField(effect.decay));
-    return this._wetDryMix(convolver, convolver, destination, this._resolveField(effect.wet));
+    this._debugCounts.convolversCreated++;
+    debugLog(`convolver #${this._debugCounts.convolversCreated}`, this._debugSnapshot());
+    try {
+      const convolver = this.ctx.createConvolver();
+      convolver.buffer = this._reverbImpulse(this._resolveField(effect.decay));
+      return this._wetDryMix(convolver, convolver, destination, this._resolveField(effect.wet));
+    } catch (err) {
+      console.error('[HiChord audio] building reverb node failed:', err, this._debugSnapshot());
+      throw err;
+    }
   }
 
   /**
@@ -451,6 +508,8 @@ export class AudioEngine {
 
   _playNote(midi, voice, when, chordSize) {
     const ctx = this.ctx;
+    this._debugCounts.notesAttacked++;
+    debugLog(`attack #${this._debugCounts.notesAttacked} midi=${midi} voice="${voice.name}"`, this._debugSnapshot());
     // Normalize by how many notes are in *this* chord, not a fixed level --
     // otherwise a wide voicing (e.g. the 5-note "9" variant) sums to several
     // times the amplitude of a plain triad.
