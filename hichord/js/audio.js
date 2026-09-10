@@ -101,16 +101,26 @@ const KEY_TRACK_REFERENCE_MIDI = 60;
 // own createWaveShaper() example --
 // https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/createWaveShaper.
 // `amount` is WebAudio's own informal "k" in that formula (roughly 0 = clean
-// through 100+ = hard clip).
-function distortionCurve(amount) {
+// through 100+ = hard clip). Memoized by `amount` (rounded) on the calling
+// AudioEngine the same way _reverbImpulse memoizes by decay (see its own
+// comment, and voices.js's distortion docs for why a randomized `amount` is
+// a bad fit for this): the curve is only ever read by a WaveShaperNode,
+// never mutated, so every note wanting the same amount can share one
+// instead of each rebuilding its own.
+function distortionCurve(engine, amount) {
+  const key = Math.round(amount * 1000);
+  let curve = engine._distortionCurveCache.get(key);
+  if (curve) return curve;
+
   const k = amount;
   const samples = 44100;
-  const curve = new Float32Array(samples);
+  curve = new Float32Array(samples);
   const deg = Math.PI / 180;
   for (let i = 0; i < samples; i++) {
     const x = (i * 2) / samples - 1;
     curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
   }
+  engine._distortionCurveCache.set(key, curve);
   return curve;
 }
 
@@ -122,6 +132,8 @@ export class AudioEngine {
     this.clickBuffer = null; // precomputed noise burst reused by every playClick() -- see unlock()
     this.voiceIndex = DEFAULT_VOICE_INDEX;
     this.active = new Map(); // voiceId -> array of sounding notes (see _playNote), one entry per polyphonic voice
+    this._reverbImpulseCache = new Map(); // decaySeconds (rounded, ms) -> AudioBuffer, see _reverbImpulse
+    this._distortionCurveCache = new Map(); // amount (rounded) -> Float32Array, see distortionCurve
   }
 
   // Must be triggered from within a user-gesture handler (keydown/pointerdown),
@@ -339,16 +351,31 @@ export class AudioEngine {
     return this._wetDryMix(convolver, convolver, destination, this._resolveField(effect.wet));
   }
 
+  /**
+   * Memoized by decaySeconds (rounded -- see voices.js's reverb docs for why
+   * a randomized `decay` is a bad fit for this): a ConvolverNode's buffer is
+   * only ever read during convolution, never mutated, so every note wanting
+   * the same decay can safely share one impulse instead of each rebuilding
+   * its own from scratch -- a fresh 2-channel, multi-second Float32Array
+   * (hundreds of thousands of Math.random()/Math.pow() calls, allocated and
+   * thrown away) otherwise built synchronously on the main thread for every
+   * single sounding note.
+   */
   _reverbImpulse(decaySeconds) {
+    const key = Math.round(decaySeconds * 1000);
+    let impulse = this._reverbImpulseCache.get(key);
+    if (impulse) return impulse;
+
     const rate = this.ctx.sampleRate;
     const length = Math.max(1, Math.round(rate * Math.max(decaySeconds, 0.01)));
-    const impulse = this.ctx.createBuffer(2, length, rate);
+    impulse = this.ctx.createBuffer(2, length, rate);
     for (let ch = 0; ch < impulse.numberOfChannels; ch++) {
       const data = impulse.getChannelData(ch);
       for (let i = 0; i < length; i++) {
         data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
       }
     }
+    this._reverbImpulseCache.set(key, impulse);
     return impulse;
   }
 
@@ -394,7 +421,7 @@ export class AudioEngine {
   /** A WaveShaperNode driven by distortionCurve above, mixed dry/wet like reverb/delay. */
   _createDistortionNode(effect, destination) {
     const shaper = this.ctx.createWaveShaper();
-    shaper.curve = distortionCurve(this._resolveField(effect.amount));
+    shaper.curve = distortionCurve(this, this._resolveField(effect.amount));
     shaper.oversample = '4x';
     return this._wetDryMix(shaper, shaper, destination, this._resolveField(effect.wet));
   }

@@ -513,5 +513,39 @@ test.describe("AudioEngine's envelope/effects graph (fake AudioContext -- no rea
       expect(engine.ctx.shapers[0].curve).toBeInstanceOf(Float32Array);
       expect(engine.ctx.shapers[0].oversample).toBe('4x');
     });
+
+    // Regression, same class of bug as the reverb caching test below: a
+    // multi-note chord on a distortion voice would otherwise rebuild the
+    // same 44100-sample curve from scratch per note.
+    test('distortion curves are cached by amount, not rebuilt per note', () => {
+      const engine = fakeEngine();
+      engine._playNote(60, noteWithEffect({ type: 'distortion', amount: 30, wet: 1 }), 0, 1);
+      engine._playNote(64, noteWithEffect({ type: 'distortion', amount: 30, wet: 1 }), 0, 1);
+      engine._playNote(67, noteWithEffect({ type: 'distortion', amount: 50, wet: 1 }), 0, 1);
+
+      expect(engine.ctx.shapers).toHaveLength(3); // one WaveShaperNode per note, as before
+      expect(engine.ctx.shapers[0].curve).toBe(engine.ctx.shapers[1].curve); // same amount -> shared curve
+      expect(engine.ctx.shapers[2].curve).not.toBe(engine.ctx.shapers[0].curve); // different amount -> its own
+    });
+
+    // Regression: a multi-note chord on a reverb voice (e.g. Airy Pad) used to
+    // rebuild a brand-new multi-second stereo impulse response from scratch
+    // for *every* sounding note -- fine for one note, but hammering keys
+    // quickly (each press sounding a several-note chord) piled up enough of
+    // this synchronous main-thread buffer-building work to stall playback
+    // entirely. Every note wanting the same decay must share one impulse
+    // instead.
+    test('reverb impulse responses are cached by decay, not rebuilt per note', () => {
+      const engine = fakeEngine();
+      engine._playNote(60, noteWithEffect({ type: 'reverb', decay: 1, wet: 0.4 }), 0, 1);
+      engine._playNote(64, noteWithEffect({ type: 'reverb', decay: 1, wet: 0.4 }), 0, 1);
+      engine._playNote(67, noteWithEffect({ type: 'reverb', decay: 1.5, wet: 0.4 }), 0, 1);
+
+      expect(engine.ctx.convolvers).toHaveLength(3); // one ConvolverNode per note, as before
+      // The two notes sharing decay 1 also share the exact same buffer...
+      expect(engine.ctx.convolvers[0].buffer).toBe(engine.ctx.convolvers[1].buffer);
+      // ...while the differently-decayed third note gets its own.
+      expect(engine.ctx.convolvers[2].buffer).not.toBe(engine.ctx.convolvers[0].buffer);
+    });
   });
 });

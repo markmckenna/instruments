@@ -92,6 +92,11 @@ function filterEffectParams(type) {
 //    https://github.com/adelespinasse/reverbGen and
 //    https://developer.mozilla.org/en-US/docs/Web/API/ConvolverNode).
 //    `decay` (seconds) is the tail length, `wet` (0-1) the dry/wet mix.
+//    AudioEngine caches the generated impulse per resolved `decay` value
+//    (see _reverbImpulse) rather than rebuilding it per note, so a "base~range"
+//    `decay` would grow that cache one entry per distinct rolled value for as
+//    long as the session runs -- fine occasionally, but not a param to
+//    randomize with a wide range.
 //  - tremolo: rhythmic amplitude modulation -- an LFO driving a GainNode, the
 //    classic Web Audio tremolo recipe. `rate` (Hz) and `depth` (0-1, how far
 //    the amplitude dips).
@@ -102,7 +107,9 @@ function filterEffectParams(type) {
 //    formula given in MDN's own createWaveShaper() example --
 //    https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/createWaveShaper.
 //    `amount` (WebAudio's own `k` in that formula -- roughly 0 (clean) to
-//    100+ (hard clip)), `wet` (0-1 mix).
+//    100+ (hard clip)), `wet` (0-1 mix). Same per-`amount` caching (and the
+//    same caveat about randomizing it widely) as reverb's `decay` above --
+//    see distortionCurve in audio.js.
 const EFFECT_PARAMS = {
   ...Object.fromEntries(FILTER_TYPES.map((type) => [type, filterEffectParams(type)])),
   reverb: ['decay', 'wet'],
