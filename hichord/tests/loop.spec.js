@@ -6,7 +6,8 @@
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
 import { expectedChordFrequencies } from './support/expected-audio.js';
-import { AudioEngine, VOICES, DEFAULT_VOICE_INDEX } from '../js/audio.js';
+import { AudioEngine } from '../js/audio.js';
+import { VOICES, DEFAULT_VOICE_INDEX } from '../js/voices.js';
 import { LoopRecorder } from '../js/loop.js';
 import { Tempo } from '../js/tempo.js';
 

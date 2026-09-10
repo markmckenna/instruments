@@ -7,7 +7,7 @@ import { holdKey, releaseKey } from './support/interactions.js';
 import { chordMidiNotes, expectedChordFrequencies, expectedTransition } from './support/expected-audio.js';
 import { CIRCLE_OF_FIFTHS, variantChordName, keyDisplayName } from '../js/theory.js';
 import { CHORD_KEYS } from '../js/input.js';
-import { VOICES, DEFAULT_VOICE_INDEX } from '../js/audio.js';
+import { VOICES, DEFAULT_VOICE_INDEX } from '../js/voices.js';
 
 function expectedChordName(keyPc, degreeIndex) {
   return variantChordName(keyPc, degreeIndex, 'neutral'); // neutral variant == the plain diatonic triad name

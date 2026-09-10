@@ -3,7 +3,8 @@
 // Audio -- both modules are safe to import directly under Node) rather than
 // a hand-copied table. If theory.js's chord/variant shapes or audio.js's
 // buildChord ever change, these expectations move with them automatically.
-import { buildChord, VOICES, DEFAULT_VOICE_INDEX } from '../../js/audio.js';
+import { buildChord } from '../../js/audio.js';
+import { VOICES, DEFAULT_VOICE_INDEX } from '../../js/voices.js';
 
 // Node's V8 and the Chromium build Playwright drives compute Math.pow a few
 // ULPs apart, so comparing raw floats against what the browser's probe

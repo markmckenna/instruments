@@ -12,13 +12,16 @@
 // effects chains, each stage optionally shaped by its own ADSR envelope) is
 // simple enough that a dependency would add more weight than value. Soft Pad
 // is the default (a little attack/decay, per the top-level README's spec).
-// See VOICES below for the actual voice/oscillator/effect schema.
+// See voices.js for the actual voice/oscillator/effect schema and presets --
+// this module only turns an already-normalized voice into a Web Audio node
+// graph, it doesn't define what a voice *is*.
 
 // MIDI is this module's concern, not theory.js's: theory.js's DEGREES/
 // VARIANTS describe chord *shape* in the abstract (scale degrees, semitone
 // offsets from a root); turning that into actual MIDI note numbers and
 // pitch names is audio-side math, alongside _freqFor below.
 import { DEGREES, VARIANTS, NEUTRAL_VARIANT, invertOffsets, pcName } from './theory.js';
+import { VOICES, DEFAULT_VOICE_INDEX, FILTER_TYPES, isRandomized } from './voices.js';
 
 /** Scientific pitch notation for a MIDI note number, e.g. 60 -> "C4". */
 export function midiName(midi) {
@@ -83,188 +86,33 @@ export function buildBassNote(keyPc, degreeIndex) {
   return 36 + pc; // 36 = C2
 }
 
-/**
- * Normalize an `envelope` value to a plain {attack, decay, sustain, release}
- * object (seconds for attack/decay/release, a 0-1 fraction of peak for
- * sustain) -- the same four numbers every envelope in this module already
- * used, just also accepted as a single CSS-shorthand-style string in that
- * order, e.g. "0.08 0.15 0.7 0.35" (comma-or-space separated, so
- * "0.08, 0.15, 0.7, 0.35" works too). An object argument passes through
- * unchanged, and so does an absent envelope (see VOICES below).
- */
-export function parseEnvelope(envelope) {
-  if (envelope == null || typeof envelope !== 'string') return envelope;
-  const [attack, decay, sustain, release] = envelope.trim().split(/[\s,]+/).map(Number);
-  return { attack, decay, sustain, release };
-}
-
-// Every effect type's own recognized parameters (besides `type` itself and
-// the `envelope` every effect already takes for free -- see below). Only
-// `filter` exists so far; a second effect type adds a second entry here.
-const EFFECT_PARAMS = { filter: ['frequency'] };
-const OSCILLATOR_WAVEFORMS = ['sine', 'square', 'sawtooth', 'triangle'];
-const OSCILLATOR_KEYS = ['type', 'detune', 'gain', 'octave', 'envelope', 'effects'];
-const VOICE_KEYS = ['name', 'envelope', 'effects', 'oscillators'];
-
-// Warn (not throw) about any key on `obj` that isn't in `known` -- see the
-// normalize functions below for why: a typo'd or not-yet-implemented field
-// on a hand-edited voice should cost you that one field, not the whole
-// note. `label` identifies `obj` in the message (e.g. `voice "Organ"`).
-function warnUnknownKeys(label, obj, known) {
-  for (const key of Object.keys(obj)) {
-    if (!known.includes(key)) {
-      console.warn(`HiChord: ${label} has an unknown "${key}" -- ignoring it, the note will still play without it.`);
-    }
-  }
-}
-
-function normalizeEffect(effect, context) {
-  const label = `${context}'s effect`;
-  const knownParams = EFFECT_PARAMS[effect.type];
-  if (!knownParams) {
-    console.warn(`HiChord: ${label} has an unknown type "${effect.type}" -- ignoring it, the note will still play without it.`);
-    return null;
-  }
-  warnUnknownKeys(`${label} (a "${effect.type}")`, effect, ['type', ...knownParams, 'envelope']);
-  return { type: effect.type, frequency: effect.frequency, envelope: parseEnvelope(effect.envelope) };
-}
-
-function normalizeOscillator(osc, context) {
-  warnUnknownKeys(context, osc, OSCILLATOR_KEYS);
-  let type = osc.type;
-  if (!OSCILLATOR_WAVEFORMS.includes(type)) {
-    console.warn(`HiChord: ${context} has an unknown waveform "${type}" -- falling back to "sine".`);
-    type = 'sine';
-  }
-  return {
-    type,
-    detune: osc.detune,
-    gain: osc.gain,
-    octave: osc.octave,
-    envelope: parseEnvelope(osc.envelope),
-    effects: (osc.effects || []).map((e) => normalizeEffect(e, context)).filter(Boolean),
-  };
-}
-
-/** Exported for tests -- see the module comment above VOICES for what this does and why. */
-export function normalizeVoice(voice) {
-  const context = `voice "${voice.name}"`;
-  warnUnknownKeys(context, voice, VOICE_KEYS);
-  return {
-    name: voice.name,
-    envelope: parseEnvelope(voice.envelope),
-    effects: (voice.effects || []).map((e) => normalizeEffect(e, context)).filter(Boolean),
-    oscillators: voice.oscillators.map((osc, i) => normalizeOscillator(osc, `${context}'s oscillator ${i + 1}`)),
-  };
-}
-
-/**
- * Voice presets. Each voice is a small mixing/processing tree, built fresh
- * per note in AudioEngine._playNote:
- *
- *   oscillator -> [its own effects] -> [its own envelope] --\
- *   oscillator -> [its own effects] -> [its own envelope] ----> [voice's own effects] -> [voice's own envelope] -> master
- *   oscillator -> [its own effects] -> [its own envelope] --/
- *
- * `envelope` (required at voice level, optional everywhere else) is the
- * ADSR this module has always used -- attack/decay/release in seconds,
- * sustain as a 0-1 fraction of peak -- written either as that object or as
- * the "attack decay sustain release" shorthand string parseEnvelope above
- * accepts. `effects` is an ordered list of processing stages; the only type
- * so far is `filter` (a lowpass biquad filter, `frequency` in Hz), and it
- * too takes an optional `envelope` -- there it shapes the filter's cutoff
- * over time instead of a gain (0 Hz at the very start of an attack, same as
- * gain envelopes start from silence).
- *
- * Every level's envelope (the voice, an individual oscillator, an
- * individual effect) is its own independent automation on its own
- * AudioParam, wired in series -- so nesting them needs no special
- * compositing logic of its own: WebAudio already multiplies gain stages (and
- * chains filters) in series the same way any signal chain does. A voice
- * with its own decay and an oscillator on it with its *own* decay just have
- * two ramps happening in series, and the two compound exactly because
- * they're multiplying. A level with no `envelope` of its own just holds its
- * param at a constant value (`gain` for an oscillator, `frequency` for a
- * filter) and lets whatever contains it do all the time-shaping -- exactly
- * today's behavior for every voice below, none of which use oscillator- or
- * effect-level envelopes yet.
- *
- * An unrecognized oscillator waveform, effect type, or extra key anywhere
- * in this shape (a typo, or a param this module doesn't implement yet) is
- * `console.warn`ed and then dropped/defaulted rather than thrown -- see the
- * normalize functions above -- so a mistake while hand-editing a voice
- * costs that one field, not the whole note.
- */
-export const VOICES = [
-  {
-    name: 'Soft Pad',
-    envelope: '0.08 0.15 0.7 0.35',
-    effects: [{ type: 'filter', frequency: 2600 }],
-    oscillators: [
-      { type: 'triangle', detune: 0, gain: 1.0, octave: 0 },
-      { type: 'sine', detune: 0, gain: 0.35, octave: 1 },
-    ],
-  },
-  {
-    name: 'Pluck',
-    envelope: '0.004 0.22 0.25 0.18',
-    effects: [{ type: 'filter', frequency: 3200 }],
-    oscillators: [
-      { type: 'sawtooth', detune: -4, gain: 0.9, octave: 0 },
-      { type: 'sawtooth', detune: 4, gain: 0.9, octave: 0 },
-    ],
-  },
-  {
-    name: 'Organ',
-    envelope: '0.012 0.04 1.0 0.12',
-    effects: [
-      { type: 'filter', frequency: 4200 },
-    ],
-    oscillators: [
-      // 16' — weight
-      { type: 'triangle', detune: 0,   gain: 0.55, octave: -1 },
-      // 8' — the note you actually hear
-      { type: 'square',   detune: 0,   gain: 0.32, octave: 0 },
-      { type: 'sine',     detune: 0,   gain: 0.45, octave: 0 },
-      // 4' — presence
-      { type: 'sine',     detune: 0,   gain: 0.30, octave: 1 },
-      // 2⅔' nasard — the fifth, quiet
-      { type: 'sine',     detune: 702, gain: 0.10, octave: 1 },
-      // 2' — air and sparkle
-      { type: 'sine',     detune: 0,   gain: 0.13, octave: 2, envelope: '0.03 0.06 0.9 0.10' },
-    ],
-  },
-  {
-    name: 'Warm Pad',
-    envelope: '0.7 1.2 0.75 2.2',
-    effects: [{ type: 'filter', frequency: 1300 }],
-    oscillators: [
-      { type: 'sawtooth', detune: -11, gain: 0.45, octave: 0 },
-      { type: 'sawtooth', detune: 7, gain: 0.45, octave: 0 },
-      { type: 'triangle', detune: -3, gain: 0.55, octave: -1 },
-      { type: 'sine', detune: 0, gain: 0.30, octave: -2 },
-    ],
-  },
-  {
-    name: 'Warm Pad Old',
-    envelope: '0.35 0.3 0.65 0.6',
-    effects: [{ type: 'filter', frequency: 1800 }],
-    oscillators: [
-      { type: 'sine', detune: -6, gain: 0.7, octave: 0 },
-      { type: 'triangle', detune: 6, gain: 0.7, octave: 0 },
-    ],
-  },
-].map(normalizeVoice);
-
-// Default voice a fresh AudioEngine starts on -- Warm Pad, per the
-// top-level README's "a little bit of attack/decay" spec (Warm Pad's own
-// attack/decay is the most pronounced of the four). Looked up by name
-// rather than a bare index literal so this stays correct if VOICES is ever
-// reordered; exported so tests/support/expected-audio.js's own default
-// tracks it too instead of hardcoding a second copy.
-export const DEFAULT_VOICE_INDEX = VOICES.findIndex((v) => v.name === 'Warm Pad');
-
 const CLICK_DURATION = 0.02; // seconds -- short enough to read as a click, not a tone
+
+// The MIDI note a filter's `keyTrack` (see voices.js) tracks *from* -- 0%
+// tracking never moves the cutoff regardless of what's played, 100% moves it
+// in exact lockstep with how far the played note (or, for an oscillator's
+// own filter, that oscillator's own octave-shifted note) sits from this
+// anchor. Middle C, same anchor buildChord's own `baseMidi` defaults to, so
+// a filter tuned "as heard" while noodling around middle C keeps that same
+// voicing there regardless of how far the tracking is turned up.
+const KEY_TRACK_REFERENCE_MIDI = 60;
+
+// The standard Web Audio "makeDistortionCurve" formula, straight from MDN's
+// own createWaveShaper() example --
+// https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/createWaveShaper.
+// `amount` is WebAudio's own informal "k" in that formula (roughly 0 = clean
+// through 100+ = hard clip).
+function distortionCurve(amount) {
+  const k = amount;
+  const samples = 44100;
+  const curve = new Float32Array(samples);
+  const deg = Math.PI / 180;
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1;
+    curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+  }
+  return curve;
+}
 
 export class AudioEngine {
   constructor() {
@@ -324,33 +172,76 @@ export class AudioEngine {
     return 440 * Math.pow(2, (midi - 69) / 12) * Math.pow(2, octaveOffset || 0);
   }
 
+  /** Roll a "base~range" descriptor (see voices.js's parseNumeric) to a plain number; a plain number/undefined passes through untouched. */
+  _resolveField(value) {
+    if (!isRandomized(value)) return value;
+    const { base, range } = value;
+    return base + (Math.random() * 2 - 1) * range;
+  }
+
   /**
-   * Schedule one envelope-shaped ramp on `param`, peaking at `peak` (a gain
-   * node's target level, or an effect's target value, e.g. a filter's
-   * frequency). With no `envelope`, `param` is just held at `peak` --
-   * no automation, so nothing to release later either (see _releaseNote) --
-   * which is how a level with no envelope of its own defers entirely to
-   * whatever level does. Returns a descriptor recording enough to read this
-   * ramp's value analytically at any later time (_envelopeValueAt) and
-   * later release it, or null when there's nothing to release.
+   * Resolve `fields` on `spec` (a voice or an oscillator) for one note: any
+   * "base~range" value rolls a fresh number now, held steady for as long as
+   * this note sounds (_resolveField above); then any `randomize` effect
+   * among `effects` overrides its own named field the same way, around
+   * whatever that field already resolved to -- see voices.js's EFFECT_PARAMS
+   * comment on the `randomize` effect for why that's a separate mechanism
+   * from the inline notation instead of just a second way to spell it.
+   * `spec`/`effects` are never mutated; a plain `{field: value}` map comes
+   * back for the caller to read instead.
    */
-  _scheduleEnvelope(param, peak, envelope, when) {
+  _resolveSpec(spec, fields, effects) {
+    const resolved = {};
+    for (const field of fields) resolved[field] = this._resolveField(spec[field]);
+    for (const effect of effects) {
+      if (effect.type !== 'randomize') continue;
+      const base = resolved[effect.property];
+      if (typeof base !== 'number') continue; // targets a field this spec doesn't have, or isn't numeric -- ignore rather than crash the note
+      resolved[effect.property] = base + (Math.random() * 2 - 1) * effect.range;
+    }
+    return resolved;
+  }
+
+  /**
+   * Schedule one envelope-shaped ramp on `param`, from `floor` (default 0)
+   * up to `peak` and back down to a `sustain`-fraction of the way between
+   * them, at a gain node's target level or an effect's target value (e.g. a
+   * filter's frequency). `floor` is 0 for every gain envelope (a note starts
+   * silent) but a filter-envelope-with-keyTrack instead floors at that
+   * filter's own (keyTracked) resting cutoff, so releasing settles back to
+   * where the filter sits with no envelope rather than slamming to ~0Hz --
+   * see _createFilterNode. With no `envelope`, `param` is just held at
+   * `peak` -- no automation, so nothing to release later either (see
+   * _releaseNote) -- which is how a level with no envelope of its own defers
+   * entirely to whatever level does. Returns a descriptor recording enough
+   * to read this ramp's value analytically at any later time
+   * (_envelopeValueAt) and later release it, or null when there's nothing to
+   * release.
+   */
+  _scheduleEnvelope(param, peak, envelope, when, floor) {
     if (!envelope) {
       param.setValueAtTime(peak, when);
       return null;
     }
+    // `floor` is left as-given (including undefined) on the returned
+    // descriptor -- see _releaseNote, which falls back to ~0 (not exactly 0)
+    // only when a level never specified one, same as before floors existed
+    // -- but the ramp math itself always needs a concrete start value.
+    const start = floor ?? 0;
     const { attack, decay, sustain, release } = envelope;
-    param.setValueAtTime(0, when);
+    const sustainLevel = start + (peak - start) * sustain;
+    param.setValueAtTime(start, when);
     param.linearRampToValueAtTime(peak, when + attack);
-    param.linearRampToValueAtTime(peak * sustain, when + attack + decay);
+    param.linearRampToValueAtTime(sustainLevel, when + attack + decay);
     return {
       param,
       attackStart: when,
       attackEnd: when + attack,
       decayEnd: when + attack + decay,
       level: peak,
-      sustainLevel: peak * sustain,
+      sustainLevel,
       release,
+      floor,
     };
   }
 
@@ -361,25 +252,165 @@ export class AudioEngine {
    * effects of its own still fans straight into the shared destination (one
    * voice-level filter processing the whole chord tone, say) instead of
    * needing a pass-through node. Any envelope-carrying effect found along
-   * the way is pushed onto `envelopes` for _releaseNote to release later.
+   * the way is pushed onto `envelopes` for _releaseNote to release later,
+   * and any extra oscillator an effect needs (a tremolo's LFO) onto
+   * `auxOscillators` for the same release pass to stop. `trackingMidi` is
+   * the MIDI pitch a filter effect's own `keyTrack` measures its distance
+   * from -- the note itself for a voice-level effect, or that oscillator's
+   * own octave-shifted pitch for one of its own effects (see _playNote).
+   *
+   * `randomize` (see voices.js) patches a field on `spec` itself rather than
+   * building a processing node of its own -- see _resolveSpec, which is
+   * where it actually gets applied -- so it's skipped here entirely.
    */
-  _buildEffectsChain(effects, destination, when, envelopes) {
+  _buildEffectsChain(effects, destination, when, envelopes, auxOscillators, trackingMidi) {
     let entry = destination;
     for (let i = effects.length - 1; i >= 0; i--) {
-      const node = this._createEffectNode(effects[i], when, envelopes);
-      node.connect(entry);
-      entry = node;
+      if (effects[i].type === 'randomize') continue;
+      entry = this._createEffectNode(effects[i], entry, when, envelopes, auxOscillators, trackingMidi);
     }
     return entry;
   }
 
-  _createEffectNode(effect, when, envelopes) {
-    if (effect.type !== 'filter') throw new Error(`AudioEngine: unknown effect type "${effect.type}"`);
+  _createEffectNode(effect, destination, when, envelopes, auxOscillators, trackingMidi) {
+    if (FILTER_TYPES.includes(effect.type)) return this._createFilterNode(effect, destination, when, envelopes, trackingMidi);
+    switch (effect.type) {
+      case 'reverb':
+        return this._createReverbNode(effect, destination);
+      case 'tremolo':
+        return this._createTremoloNode(effect, destination, when, auxOscillators);
+      case 'delay':
+        return this._createDelayNode(effect, destination);
+      case 'distortion':
+        return this._createDistortionNode(effect, destination);
+      default:
+        throw new Error(`AudioEngine: unknown effect type "${effect.type}"`);
+    }
+  }
+
+  /**
+   * A BiquadFilterNode of `effect.type` (any of voices.js's FILTER_TYPES --
+   * the type string doubles as WebAudio's own BiquadFilterNode.type value).
+   * `resonance`/`gain` map straight to the node's own Q/gain when that
+   * filter type uses them (see voices.js's SHELF_TYPES/GAIN_TYPES). The
+   * cutoff itself is `keyTrack`-scaled by how far `trackingMidi` sits from
+   * KEY_TRACK_REFERENCE_MIDI (see that constant), then optionally swept by
+   * `envAmount` (also scaled the same way, so the whole sweep transposes
+   * with the note) over `envelope`'s shape, floored at the unswept
+   * (keyTracked) cutoff rather than 0Hz -- see _scheduleEnvelope.
+   */
+  _createFilterNode(effect, destination, when, envelopes, trackingMidi) {
     const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    const envelope = this._scheduleEnvelope(filter.frequency, effect.frequency, effect.envelope, when);
+    filter.type = effect.type;
+    if (effect.resonance !== undefined) filter.Q.value = this._resolveField(effect.resonance);
+    if (effect.gain !== undefined) filter.gain.value = this._resolveField(effect.gain);
+
+    const keyTrack = this._resolveField(effect.keyTrack);
+    const scale = Math.pow(2, (keyTrack * (trackingMidi - KEY_TRACK_REFERENCE_MIDI)) / 12);
+    const base = this._resolveField(effect.frequency) * scale;
+    const amount = this._resolveField(effect.envAmount) * scale;
+
+    const envelope = this._scheduleEnvelope(filter.frequency, base + amount, effect.envelope, when, base);
     if (envelope) envelopes.push(envelope);
+
+    filter.connect(destination);
     return filter;
+  }
+
+  /**
+   * Wire a dry/wet blend around an already-built processing chain
+   * (`chainInput` .. `chainOutput` -- the same node when the chain is just
+   * one node) versus the untouched signal, both feeding `destination`.
+   * Returns the node callers should feed their input into. Shared by every
+   * effect that offers a wet/dry mix (reverb, delay, distortion) instead of
+   * each wiring this three-way fan-out itself.
+   */
+  _wetDryMix(chainInput, chainOutput, destination, wet) {
+    const input = this.ctx.createGain();
+    const dry = this.ctx.createGain();
+    dry.gain.value = 1 - wet;
+    const wetGain = this.ctx.createGain();
+    wetGain.gain.value = wet;
+    input.connect(dry);
+    dry.connect(destination);
+    input.connect(chainInput);
+    chainOutput.connect(wetGain);
+    wetGain.connect(destination);
+    return input;
+  }
+
+  /**
+   * Algorithmic reverb: a ConvolverNode fed a synthetic impulse response
+   * instead of a recorded one -- exponentially-decaying white noise makes a
+   * convincing reverb tail on its own, a long-known trick (see
+   * https://github.com/adelespinasse/reverbGen and
+   * https://developer.mozilla.org/en-US/docs/Web/API/ConvolverNode), so no
+   * sample file is needed just to add reverb.
+   */
+  _createReverbNode(effect, destination) {
+    const convolver = this.ctx.createConvolver();
+    convolver.buffer = this._reverbImpulse(this._resolveField(effect.decay));
+    return this._wetDryMix(convolver, convolver, destination, this._resolveField(effect.wet));
+  }
+
+  _reverbImpulse(decaySeconds) {
+    const rate = this.ctx.sampleRate;
+    const length = Math.max(1, Math.round(rate * Math.max(decaySeconds, 0.01)));
+    const impulse = this.ctx.createBuffer(2, length, rate);
+    for (let ch = 0; ch < impulse.numberOfChannels; ch++) {
+      const data = impulse.getChannelData(ch);
+      for (let i = 0; i < length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
+      }
+    }
+    return impulse;
+  }
+
+  /**
+   * Tremolo: rhythmic amplitude modulation, the classic Web Audio recipe --
+   * an LFO (a plain OscillatorNode) driving a GainNode's own gain instead of
+   * an audible signal. Centered so the gain swings between (1 - depth) and 1
+   * rather than clipping above unity. The LFO has no natural stop of its
+   * own (unlike the note's main oscillators, which stop when their envelope
+   * finishes -- see _playNote/_releaseNote), so it's pushed onto
+   * `auxOscillators` for _releaseNote to stop alongside them.
+   */
+  _createTremoloNode(effect, destination, when, auxOscillators) {
+    const depth = this._resolveField(effect.depth);
+    const node = this.ctx.createGain();
+    node.gain.value = 1 - depth / 2;
+    node.connect(destination);
+
+    const lfo = this.ctx.createOscillator();
+    lfo.auxiliary = true; // not a note -- see tests/support/fixtures.js's probe, which skips these
+    lfo.frequency.value = this._resolveField(effect.rate);
+    const lfoDepth = this.ctx.createGain();
+    lfoDepth.gain.value = depth / 2;
+    lfo.connect(lfoDepth);
+    lfoDepth.connect(node.gain);
+    lfo.start(when);
+    auxOscillators.push(lfo);
+
+    return node;
+  }
+
+  /** A single-tap echo: a DelayNode with a feedback loop back into itself, mixed dry/wet like reverb/distortion. */
+  _createDelayNode(effect, destination) {
+    const delay = this.ctx.createDelay(1); // 1s ceiling comfortably covers this instrument's tempo range (see tempo.js)
+    delay.delayTime.value = this._resolveField(effect.time);
+    const feedback = this.ctx.createGain();
+    feedback.gain.value = this._resolveField(effect.feedback);
+    delay.connect(feedback);
+    feedback.connect(delay);
+    return this._wetDryMix(delay, delay, destination, this._resolveField(effect.wet));
+  }
+
+  /** A WaveShaperNode driven by distortionCurve above, mixed dry/wet like reverb/delay. */
+  _createDistortionNode(effect, destination) {
+    const shaper = this.ctx.createWaveShaper();
+    shaper.curve = distortionCurve(this._resolveField(effect.amount));
+    shaper.oversample = '4x';
+    return this._wetDryMix(shaper, shaper, destination, this._resolveField(effect.wet));
   }
 
   _playNote(midi, voice, when, chordSize) {
@@ -390,42 +421,61 @@ export class AudioEngine {
     const level = 1 / Math.sqrt(Math.max(1, chordSize));
 
     const noteGain = ctx.createGain();
-    noteGain.connect(this.master);
+    const voicePan = ctx.createStereoPanner();
+    noteGain.connect(voicePan);
+    voicePan.connect(this.master);
     // The voice's own envelope is the note's overall shape, and (unlike
-    // every other level) always defined -- see VOICES -- so `outer` is
+    // every other level) always defined -- see voices.js -- so `outer` is
     // never null.
     const outer = this._scheduleEnvelope(noteGain.gain, level, voice.envelope, when);
 
     // Every other envelope-carrying param on this note (an oscillator's own,
-    // or an effect's) -- see _releaseNote.
+    // or an effect's) -- see _releaseNote. `aux` collects extra oscillators
+    // an effect needs (a tremolo's LFO) that also need stopping there.
     const inner = [];
+    const aux = [];
+
+    const voiceValues = this._resolveSpec(voice, ['pan'], voice.effects);
+    voicePan.pan.value = voiceValues.pan;
+
     // Voice-level effects sit between the mixed oscillators and the voice's
     // own envelope, so (e.g.) one filter processes the whole chord tone --
-    // every oscillator below fans into this same entry point.
-    const voiceEntry = this._buildEffectsChain(voice.effects, noteGain, when, inner);
+    // every oscillator below fans into this same entry point. A voice-level
+    // filter's keyTrack measures from the note itself (no one oscillator's
+    // octave shift is "the" pitch here).
+    const voiceEntry = this._buildEffectsChain(voice.effects, noteGain, when, inner, aux, midi);
 
     const oscs = voice.oscillators.map((spec) => {
+      const oscValues = this._resolveSpec(spec, ['detune', 'gain', 'octave', 'pan'], spec.effects);
+
       const osc = ctx.createOscillator();
       osc.type = spec.type;
-      osc.detune.value = spec.detune;
-      osc.frequency.value = this._freqFor(midi, spec.octave);
+      osc.detune.value = oscValues.detune;
+      osc.frequency.value = this._freqFor(midi, oscValues.octave);
 
       const oscGain = ctx.createGain();
-      const oscEnvelope = this._scheduleEnvelope(oscGain.gain, spec.gain, spec.envelope, when);
+      const oscEnvelope = this._scheduleEnvelope(oscGain.gain, oscValues.gain, spec.envelope, when);
       if (oscEnvelope) inner.push(oscEnvelope);
+
+      const oscPan = ctx.createStereoPanner();
+      oscPan.pan.value = oscValues.pan;
       osc.connect(oscGain);
+      oscGain.connect(oscPan);
 
       // This oscillator's own effects (if any) run before it joins the
       // voice-level mix -- e.g. a different filter per oscillator, rather
-      // than only the one shared voice-level filter.
-      const oscEntry = this._buildEffectsChain(spec.effects, voiceEntry, when, inner);
-      oscGain.connect(oscEntry);
+      // than only the one shared voice-level filter. Its own keyTrack
+      // measures from *this oscillator's* actual sounding pitch, which can
+      // differ from the note's own MIDI pitch by its octave setting.
+      const trackingMidi = midi + (oscValues.octave || 0) * 12;
+      const oscEntry = this._buildEffectsChain(spec.effects, voiceEntry, when, inner, aux, trackingMidi);
+      oscPan.connect(oscEntry);
 
       osc.start(when);
-      return { node: osc, octave: spec.octave || 0 };
+      return { node: osc, octave: oscValues.octave || 0 };
     });
 
-    return { oscs, outer, inner, midi };
+    return { oscs, outer, inner, aux, midi };
   }
 
   /**
@@ -538,9 +588,12 @@ export class AudioEngine {
    * an already-sounding note's release the same way it always could, before
    * oscillator/effect envelopes existed. Every other envelope (an
    * oscillator's or an effect's own) has no such "current voice" to re-read,
-   * so each releases at whatever rate it was given when the note attacked.
-   * The actual oscillators stop once the slowest of all of these has fully
-   * released.
+   * so each releases at whatever rate it was given when the note attacked,
+   * settling at that envelope's own `floor` (0 for a gain envelope, a
+   * filter's keyTracked resting cutoff for one of those -- see
+   * _scheduleEnvelope) rather than always all the way to ~silence. The
+   * actual oscillators (and any auxiliary ones, e.g. a tremolo's LFO) stop
+   * once the slowest of all of these has fully released.
    */
   _releaseNote(note, voice, at) {
     const release = (env, releaseTime) => {
@@ -553,7 +606,7 @@ export class AudioEngine {
       // still climbing.
       env.param.cancelScheduledValues(at);
       env.param.setValueAtTime(this._envelopeValueAt(env, at), at);
-      env.param.linearRampToValueAtTime(0.0001, at + releaseTime);
+      env.param.linearRampToValueAtTime(env.floor ?? 0.0001, at + releaseTime);
       return releaseTime;
     };
 
@@ -561,13 +614,14 @@ export class AudioEngine {
     for (const env of note.inner) maxRelease = Math.max(maxRelease, release(env, env.release));
 
     note.oscs.forEach(({ node }) => node.stop(at + maxRelease + 0.02));
+    note.aux.forEach((node) => node.stop(at + maxRelease + 0.02));
   }
 
   /** What _scheduleEnvelope()'s attack/decay/sustain ramp evaluates to at time `t`. */
   _envelopeValueAt(note, t) {
-    const { attackStart, attackEnd, decayEnd, level, sustainLevel } = note;
-    if (t <= attackStart) return 0;
-    if (t < attackEnd) return level * ((t - attackStart) / (attackEnd - attackStart));
+    const { attackStart, attackEnd, decayEnd, level, sustainLevel, floor = 0 } = note;
+    if (t <= attackStart) return floor;
+    if (t < attackEnd) return floor + (level - floor) * ((t - attackStart) / (attackEnd - attackStart));
     if (t < decayEnd) return level + (sustainLevel - level) * ((t - attackEnd) / (decayEnd - attackEnd));
     return sustainLevel;
   }

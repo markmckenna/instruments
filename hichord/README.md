@@ -116,8 +116,8 @@ natural key (e.g. "G"), or both spellings for one that's a sharp/flat (e.g.
 buttons themselves always stay on one spelling, since naming one specific
 chord has no such ambiguity to show.
 
-**Voice** — `↑` / `↓` (or the on-screen arrows) cycle through 4 sounds: Soft
-Pad, Pluck, Organ, Warm Pad (default).
+**Voice** — `↑` / `↓` (or the on-screen arrows) cycle through 5 sounds: Soft
+Pad, Pluck, Organ, Warm Pad (default), Airy Pad.
 
 **Octave shift** — `[` / `]` (or the on-screen brackets) do one of three
 things depending on what's held:

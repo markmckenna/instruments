@@ -31,15 +31,19 @@ function installAudioProbe() {
   window.AudioContext = ProbedAudioContext;
   window.webkitAudioContext = ProbedAudioContext;
 
+  // `.auxiliary` (see AudioEngine._createTremoloNode) marks an oscillator
+  // that isn't a note at all -- an effect's own internal LFO -- so it's
+  // skipped here rather than logged as a spurious extra "note" alongside
+  // whatever chord is actually sounding.
   const origStart = OscillatorNode.prototype.start;
   OscillatorNode.prototype.start = function (...args) {
-    window.__audioEvents.push({ type: 'start', freq: round(this.frequency.value) });
+    if (!this.auxiliary) window.__audioEvents.push({ type: 'start', freq: round(this.frequency.value) });
     return origStart.apply(this, args);
   };
 
   const origStop = OscillatorNode.prototype.stop;
   OscillatorNode.prototype.stop = function (...args) {
-    window.__audioEvents.push({ type: 'stop', freq: round(this.frequency.value) });
+    if (!this.auxiliary) window.__audioEvents.push({ type: 'stop', freq: round(this.frequency.value) });
     return origStop.apply(this, args);
   };
 
