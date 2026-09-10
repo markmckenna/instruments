@@ -5,7 +5,7 @@
 PORT ?= 4173
 URL := http://localhost:$(PORT)
 
-.PHONY: help run open stop browsers test-host-start test-host-stop check
+.PHONY: help run open stop browsers test-host-start test-host-stop check test-one
 
 help: ## List available commands
 	@echo "hichord -- available commands:"
@@ -59,3 +59,11 @@ test-host-stop: ## Stop the Playwright browser server
 
 check: node_modules ## Run the automated integration tests (see tests/README.md)
 	@bash tools/check.sh
+
+# For fast iteration on one test/bug -- streams Playwright's own output
+# straight through instead of capturing it to a log, and skips the
+# PASSED/FAILED contract `check` follows (see tools/test-one.sh). Also
+# sidesteps any interactive-shell wrapper around `npx` that could otherwise
+# get in the way of running Playwright directly.
+test-one: node_modules ## Run one test file, e.g. make test-one FILE=tests/loop.spec.js [GREP="test name"]
+	@bash tools/test-one.sh "$(FILE)" "$(GREP)"

@@ -41,21 +41,11 @@ if [ "$syntax_failed" -ne 0 ]; then
   exit 1
 fi
 
-# Use a running `make test-host-start` server if there is one (see
-# ../Makefile "Browser server") -- lets the suite run somewhere a sandboxed
-# agent can't spawn a browser process itself. Falls back to Playwright
-# launching its own local browser otherwise, same as always.
-#
-# Liveness is checked by whether the port is listening (lsof), not by
-# signaling the recorded pid (kill -0): a sandboxed agent process is denied
-# permission to signal a pid outside its own process tree even to just
-# probe existence, which would otherwise make the server look dead here
-# even while it's running fine in the caller's own shell.
-endpoint=$(grep -o 'ws://[^[:space:]]*' build/browser-server.log 2>/dev/null | tail -1)
-port=$(echo "$endpoint" | sed -E 's#.*:([0-9]+)/?$#\1#')
-if [ -n "$port" ] && lsof -ti "tcp:$port" >/dev/null 2>&1; then
-  export PW_TEST_CONNECT_WS_ENDPOINT="$endpoint"
-fi
+# Use a running `make test-host-start` server if there is one -- lets the
+# suite run somewhere a sandboxed agent can't spawn a browser process itself.
+# Falls back to Playwright launching its own local browser otherwise, same
+# as always. See tools/browser-endpoint.sh for how the server is detected.
+source tools/browser-endpoint.sh
 
 npx playwright test > "$log" 2>&1
 status=$?
