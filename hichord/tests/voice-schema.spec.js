@@ -5,7 +5,20 @@
 // envelopes compound without this module doing any multiplication itself.
 // See audio.js's own comment above VOICES for the schema this exercises.
 import { test, expect } from './support/fixtures.js';
-import { AudioEngine, parseEnvelope } from '../js/audio.js';
+import { AudioEngine, parseEnvelope, normalizeVoice } from '../js/audio.js';
+
+// Captures console.warn calls made during `fn()` instead of letting them
+// print, and restores the original afterward even if `fn` throws.
+function withWarnCaptured(fn) {
+  const warnings = [];
+  const original = console.warn;
+  console.warn = (msg) => warnings.push(msg);
+  try {
+    return { result: fn(), warnings };
+  } finally {
+    console.warn = original;
+  }
+}
 
 test.describe('parseEnvelope', () => {
   test('parses a space-separated shorthand string in attack/decay/sustain/release order', () => {
@@ -23,6 +36,61 @@ test.describe('parseEnvelope', () => {
 
   test('passes an absent envelope through unchanged', () => {
     expect(parseEnvelope(undefined)).toBeUndefined();
+  });
+});
+
+test.describe('normalizeVoice: unrecognized fields degrade instead of breaking the voice', () => {
+  const baseVoice = () => ({
+    name: 'Test',
+    envelope: '0 0 1 0',
+    effects: [],
+    oscillators: [{ type: 'sine', detune: 0, gain: 1, octave: 0 }],
+  });
+
+  test('an unknown effect type is dropped, with a warning, leaving the rest of the voice intact', () => {
+    const { result: voice, warnings } = withWarnCaptured(() =>
+      normalizeVoice({
+        ...baseVoice(),
+        effects: [{ type: 'filter', frequency: 1000 }, { type: 'highpass', frequency: 65 }],
+      }),
+    );
+
+    expect(voice.effects).toHaveLength(1); // the unknown 'highpass' effect is dropped, not left broken
+    expect(voice.effects[0].type).toBe('filter');
+    expect(warnings.some((w) => w.includes('unknown type "highpass"'))).toBe(true);
+  });
+
+  test('an unknown param on a known effect type is dropped, with a warning, leaving that effect otherwise intact', () => {
+    const { result: voice, warnings } = withWarnCaptured(() =>
+      normalizeVoice({ ...baseVoice(), effects: [{ type: 'filter', frequency: 1000, Q: 0.5, keyTrack: 0.5 }] }),
+    );
+
+    expect(voice.effects[0]).toEqual({ type: 'filter', frequency: 1000, envelope: undefined });
+    expect(warnings.some((w) => w.includes('unknown "Q"'))).toBe(true);
+    expect(warnings.some((w) => w.includes('unknown "keyTrack"'))).toBe(true);
+  });
+
+  test('an unknown oscillator waveform falls back to sine, with a warning, instead of an invalid type', () => {
+    const { result: voice, warnings } = withWarnCaptured(() =>
+      normalizeVoice({ ...baseVoice(), oscillators: [{ type: 'supersaw', detune: 0, gain: 1, octave: 0 }] }),
+    );
+
+    expect(voice.oscillators[0].type).toBe('sine');
+    expect(warnings.some((w) => w.includes('unknown waveform "supersaw"'))).toBe(true);
+  });
+
+  test('an unknown key on a voice or an oscillator is warned about but does not stop normalization', () => {
+    const { result: voice, warnings } = withWarnCaptured(() =>
+      normalizeVoice({
+        ...baseVoice(),
+        reverb: 0.5, // not a real voice-level field
+        oscillators: [{ type: 'sine', detune: 0, gain: 1, octave: 0, portamento: 0.1 }],
+      }),
+    );
+
+    expect(voice.name).toBe('Test'); // normalization still completed
+    expect(warnings.some((w) => w.includes('voice "Test"') && w.includes('unknown "reverb"'))).toBe(true);
+    expect(warnings.some((w) => w.includes('unknown "portamento"'))).toBe(true);
   });
 });
 

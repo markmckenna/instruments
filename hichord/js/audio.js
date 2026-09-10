@@ -98,20 +98,63 @@ export function parseEnvelope(envelope) {
   return { attack, decay, sustain, release };
 }
 
-function normalizeEffect(effect) {
-  return { ...effect, envelope: parseEnvelope(effect.envelope) };
+// Every effect type's own recognized parameters (besides `type` itself and
+// the `envelope` every effect already takes for free -- see below). Only
+// `filter` exists so far; a second effect type adds a second entry here.
+const EFFECT_PARAMS = { filter: ['frequency'] };
+const OSCILLATOR_WAVEFORMS = ['sine', 'square', 'sawtooth', 'triangle'];
+const OSCILLATOR_KEYS = ['type', 'detune', 'gain', 'octave', 'envelope', 'effects'];
+const VOICE_KEYS = ['name', 'envelope', 'effects', 'oscillators'];
+
+// Warn (not throw) about any key on `obj` that isn't in `known` -- see the
+// normalize functions below for why: a typo'd or not-yet-implemented field
+// on a hand-edited voice should cost you that one field, not the whole
+// note. `label` identifies `obj` in the message (e.g. `voice "Organ"`).
+function warnUnknownKeys(label, obj, known) {
+  for (const key of Object.keys(obj)) {
+    if (!known.includes(key)) {
+      console.warn(`HiChord: ${label} has an unknown "${key}" -- ignoring it, the note will still play without it.`);
+    }
+  }
 }
 
-function normalizeOscillator(osc) {
-  return { ...osc, envelope: parseEnvelope(osc.envelope), effects: (osc.effects || []).map(normalizeEffect) };
+function normalizeEffect(effect, context) {
+  const label = `${context}'s effect`;
+  const knownParams = EFFECT_PARAMS[effect.type];
+  if (!knownParams) {
+    console.warn(`HiChord: ${label} has an unknown type "${effect.type}" -- ignoring it, the note will still play without it.`);
+    return null;
+  }
+  warnUnknownKeys(`${label} (a "${effect.type}")`, effect, ['type', ...knownParams, 'envelope']);
+  return { type: effect.type, frequency: effect.frequency, envelope: parseEnvelope(effect.envelope) };
 }
 
-function normalizeVoice(voice) {
+function normalizeOscillator(osc, context) {
+  warnUnknownKeys(context, osc, OSCILLATOR_KEYS);
+  let type = osc.type;
+  if (!OSCILLATOR_WAVEFORMS.includes(type)) {
+    console.warn(`HiChord: ${context} has an unknown waveform "${type}" -- falling back to "sine".`);
+    type = 'sine';
+  }
   return {
-    ...voice,
+    type,
+    detune: osc.detune,
+    gain: osc.gain,
+    octave: osc.octave,
+    envelope: parseEnvelope(osc.envelope),
+    effects: (osc.effects || []).map((e) => normalizeEffect(e, context)).filter(Boolean),
+  };
+}
+
+/** Exported for tests -- see the module comment above VOICES for what this does and why. */
+export function normalizeVoice(voice) {
+  const context = `voice "${voice.name}"`;
+  warnUnknownKeys(context, voice, VOICE_KEYS);
+  return {
+    name: voice.name,
     envelope: parseEnvelope(voice.envelope),
-    effects: (voice.effects || []).map(normalizeEffect),
-    oscillators: voice.oscillators.map(normalizeOscillator),
+    effects: (voice.effects || []).map((e) => normalizeEffect(e, context)).filter(Boolean),
+    oscillators: voice.oscillators.map((osc, i) => normalizeOscillator(osc, `${context}'s oscillator ${i + 1}`)),
   };
 }
 
@@ -145,6 +188,12 @@ function normalizeVoice(voice) {
  * filter) and lets whatever contains it do all the time-shaping -- exactly
  * today's behavior for every voice below, none of which use oscillator- or
  * effect-level envelopes yet.
+ *
+ * An unrecognized oscillator waveform, effect type, or extra key anywhere
+ * in this shape (a typo, or a param this module doesn't implement yet) is
+ * `console.warn`ed and then dropped/defaulted rather than thrown -- see the
+ * normalize functions above -- so a mistake while hand-editing a voice
+ * costs that one field, not the whole note.
  */
 export const VOICES = [
   {
@@ -170,12 +219,19 @@ export const VOICES = [
     envelope: '0.012 0.04 1.0 0.12',
     effects: [
       { type: 'filter', frequency: 4200 },
-      { type: 'highpass', frequency: 65 },
     ],
     oscillators: [
-      { type: 'triangle', detune: 0, gain: 0.55, octave: -1 },
-      { type: 'square', detune: 0, gain: 0.32, octave: 0 },
-      { type: 'sine', detune: 0, gain: 0.45, octave: 0 },
+      // 16' — weight
+      { type: 'triangle', detune: 0,   gain: 0.55, octave: -1 },
+      // 8' — the note you actually hear
+      { type: 'square',   detune: 0,   gain: 0.32, octave: 0 },
+      { type: 'sine',     detune: 0,   gain: 0.45, octave: 0 },
+      // 4' — presence
+      { type: 'sine',     detune: 0,   gain: 0.30, octave: 1 },
+      // 2⅔' nasard — the fifth, quiet
+      { type: 'sine',     detune: 702, gain: 0.10, octave: 1 },
+      // 2' — air and sparkle
+      { type: 'sine',     detune: 0,   gain: 0.13, octave: 2, envelope: '0.03 0.06 0.9 0.10' },
     ],
   },
   {
