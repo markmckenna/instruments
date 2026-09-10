@@ -101,16 +101,29 @@ const KEY_TRACK_REFERENCE_MIDI = 60;
 // own createWaveShaper() example --
 // https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/createWaveShaper.
 // `amount` is WebAudio's own informal "k" in that formula (roughly 0 = clean
-// through 100+ = hard clip).
-function distortionCurve(amount) {
+// through 100+ = hard clip). Memoized by `amount` (rounded) on the calling
+// AudioEngine the same way _reverbImpulse is: the curve is only ever read by
+// a WaveShaperNode, never mutated, so every note wanting the same amount can
+// share one instead of each rebuilding its own -- see _reverbImpulse's
+// comment for why a per-note rebuild here would be the same bug, just
+// smaller (a fixed 44100-sample Float32Array vs. reverb's multi-second
+// stereo one). No shipped voice uses `distortion` yet, but it's a fully
+// supported effect type, so this is cheap insurance against the same
+// lockup the moment one does.
+function distortionCurve(engine, amount) {
+  const key = Math.round(amount * 1000);
+  let curve = engine._distortionCurveCache.get(key);
+  if (curve) return curve;
+
   const k = amount;
   const samples = 44100;
-  const curve = new Float32Array(samples);
+  curve = new Float32Array(samples);
   const deg = Math.PI / 180;
   for (let i = 0; i < samples; i++) {
     const x = (i * 2) / samples - 1;
     curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
   }
+  engine._distortionCurveCache.set(key, curve);
   return curve;
 }
 
@@ -123,6 +136,7 @@ export class AudioEngine {
     this.voiceIndex = DEFAULT_VOICE_INDEX;
     this.active = new Map(); // voiceId -> array of sounding notes (see _playNote), one entry per polyphonic voice
     this._reverbImpulseCache = new Map(); // decaySeconds (rounded, ms) -> AudioBuffer, see _reverbImpulse
+    this._distortionCurveCache = new Map(); // amount (rounded) -> Float32Array, see distortionCurve
   }
 
   // Must be triggered from within a user-gesture handler (keydown/pointerdown),
@@ -414,7 +428,7 @@ export class AudioEngine {
   /** A WaveShaperNode driven by distortionCurve above, mixed dry/wet like reverb/delay. */
   _createDistortionNode(effect, destination) {
     const shaper = this.ctx.createWaveShaper();
-    shaper.curve = distortionCurve(this._resolveField(effect.amount));
+    shaper.curve = distortionCurve(this, this._resolveField(effect.amount));
     shaper.oversample = '4x';
     return this._wetDryMix(shaper, shaper, destination, this._resolveField(effect.wet));
   }
