@@ -1,6 +1,6 @@
-// Bass toggle (KeyB / the on-screen B button): an independent low root,
-// always in scientific-pitch octave 2 regardless of a chord's own octave
-// shift (see audio.js's buildBassNote), layered onto whatever mode is
+// Bass toggle (KeyB / the on-screen B button, on by default): an independent
+// low root, always in scientific-pitch octave 2 regardless of a chord's own
+// octave shift (see audio.js's buildBassNote), layered onto whatever mode is
 // already doing rather than being a mode itself (see input.js's
 // refreshSound). Not arpeggiated even when Arpeggio mode is on -- it gets
 // its own voice ('bass' live, 'loop-bass' in a loop) precisely so the
@@ -9,30 +9,29 @@ import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js
 import { holdKey, releaseKey } from './support/interactions.js';
 import { buildBassNote, midiName } from '../js/audio.js';
 
-test('the bass toggle (button and B key) sounds an extra low root under a held chord', async ({ page }) => {
+test('bass defaults on, and both the button and the B key toggle it', async ({ page }) => {
   const bassBtn = page.locator('[data-action="bass-toggle"]');
   const notesDisplay = page.locator('[data-display="playing-notes"]');
 
-  await expect(bassBtn).not.toHaveClass(/active/);
-  await bassBtn.click();
-  await expect(bassBtn).toHaveClass(/active/);
+  await expect(bassBtn).toHaveClass(/active/); // on by default
 
   await holdKey(page, 'j'); // C
   await expect(notesDisplay).toContainText(midiName(buildBassNote(0, 0))); // C2
   await releaseKey(page, 'j');
 
-  await holdKey(page, 'b'); // toggle back off via the keyboard shortcut
+  await holdKey(page, 'b'); // toggle off via the keyboard shortcut
   await releaseKey(page, 'b');
   await expect(bassBtn).not.toHaveClass(/active/);
 
   await holdKey(page, 'j');
   await expect(notesDisplay).not.toContainText(midiName(buildBassNote(0, 0)));
   await releaseKey(page, 'j');
+
+  await bassBtn.click(); // back on via the on-screen button
+  await expect(bassBtn).toHaveClass(/active/);
 });
 
 test('the bass note stays in octave 2 no matter how the chord above it is octave-shifted', async ({ page }) => {
-  await page.click('[data-action="bass-toggle"]');
-
   await holdKey(page, 'j');
   await holdKey(page, ']'); // shift J's pitch up live, per octave.spec.js
   await releaseKey(page, ']');
@@ -42,13 +41,11 @@ test('the bass note stays in octave 2 no matter how the chord above it is octave
   await expect(notesDisplay).toContainText(midiName(buildBassNote(0, 0))); // still C2, not shifted along with the chord
 
   await releaseKey(page, 'j');
-  await page.click('[data-action="bass-toggle"]');
 });
 
 test('bass is never arpeggiated -- it sustains while Arpeggio mode steps through the rest of the chord', async ({
   page,
 }) => {
-  await page.click('[data-action="bass-toggle"]');
   await page.click('[data-action="mode-cycle"]'); // Chord -> Arpeggio
 
   await holdKey(page, 'j');
@@ -70,13 +67,9 @@ test('bass is never arpeggiated -- it sustains while Arpeggio mode steps through
   expect(later.bass[0].midi).toBe(first.bass[0].midi); // same note the whole time, never retriggered by a step
 
   await releaseKey(page, 'j');
-  await page.click('[data-action="mode-cycle"]'); // Arpeggio -> Lead
-  await page.click('[data-action="mode-cycle"]'); // Lead -> Chord
-  await page.click('[data-action="bass-toggle"]');
 });
 
 test('a bass note recorded during Arpeggio mode plays back on its own track, not arpeggiated', async ({ page }) => {
-  await page.click('[data-action="bass-toggle"]');
   await page.click('[data-action="mode-cycle"]'); // Chord -> Arpeggio
 
   await holdKey(page, 'Space');
@@ -97,8 +90,4 @@ test('a bass note recorded during Arpeggio mode plays back on its own track, not
   await page.waitForTimeout(600);
   const replayed = await audioEventsSince(page, mark);
   expect(replayed.some((e) => e.type === 'start')).toBe(true); // the loop actually plays back
-
-  await page.click('[data-action="mode-cycle"]'); // Arpeggio -> Lead
-  await page.click('[data-action="mode-cycle"]'); // Lead -> Chord
-  await page.click('[data-action="bass-toggle"]');
 });

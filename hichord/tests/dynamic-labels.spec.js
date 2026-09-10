@@ -11,6 +11,13 @@ import { holdKey, releaseKey, holdButtonByMouse, releaseMouse } from './support/
 import { VARIANTS, variantChordName } from '../js/theory.js';
 import { VARIANT_GRID, VARIANT_KEYS } from '../js/input.js';
 
+// Bass now defaults on (see bass.spec.js) -- turned off here so the
+// now-playing notesDisplay assertion below matches plain chord math, not
+// chord+bass.
+test.beforeEach(async ({ page }) => {
+  await page.click('[data-action="bass-toggle"]');
+});
+
 test('every variant button shows its fixed mood name, in grid order, regardless of held state', async ({
   page,
 }) => {

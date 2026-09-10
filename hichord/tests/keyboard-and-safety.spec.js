@@ -6,6 +6,13 @@ import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js
 import { holdKey, releaseKey } from './support/interactions.js';
 import { expectedChordFrequencies } from './support/expected-audio.js';
 
+// Bass now defaults on (see bass.spec.js) -- turned off here so exact
+// stopped-event-count assertions below match plain chord math, not
+// chord+bass (panic() releases both).
+test.beforeEach(async ({ page }) => {
+  await page.click('[data-action="bass-toggle"]');
+});
+
 test('a synthetic OS key-repeat keydown does not retrigger the chord', async ({ page }) => {
   await holdKey(page, 'j');
 

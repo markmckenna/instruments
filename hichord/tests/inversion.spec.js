@@ -8,6 +8,13 @@ import { holdKey, releaseKey } from './support/interactions.js';
 import { chordMidiNotes, expectedTransition } from './support/expected-audio.js';
 import { buildChord, midiName } from '../js/audio.js';
 
+// Bass now defaults on (see bass.spec.js) -- turned off here so exact
+// notesDisplay/frequency assertions below match plain chord math, not
+// chord+bass.
+test.beforeEach(async ({ page }) => {
+  await page.click('[data-action="bass-toggle"]');
+});
+
 test('tapping / while a chord is held cycles its inversion, audibly and in its name', async ({ page }) => {
   await holdKey(page, 'j'); // C major triad: C4 E4 G4
 

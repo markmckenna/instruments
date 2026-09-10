@@ -6,6 +6,12 @@ import { test, expect } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
 import { buildChord, midiName } from '../js/audio.js';
 
+// Bass now defaults on (see bass.spec.js) -- turned off here so exact
+// notesDisplay assertions below match plain chord math, not chord+bass.
+test.beforeEach(async ({ page }) => {
+  await page.click('[data-action="bass-toggle"]');
+});
+
 test('locking a variant to a chord keeps it shaped that way after release', async ({ page }) => {
   const jName = page.locator('[data-base="KeyJ"] .chord-name');
 

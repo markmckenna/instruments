@@ -13,6 +13,12 @@ function sortedNoteNames(notes) {
   return [...notes].sort((a, b) => a - b).map(midiName).join(' ');
 }
 
+// Bass now defaults on (see bass.spec.js) -- turned off here so exact
+// notesDisplay assertions below match plain chord math, not chord+bass.
+test.beforeEach(async ({ page }) => {
+  await page.click('[data-action="bass-toggle"]');
+});
+
 test('the mode control cycles Chord -> Arpeggio -> Lead -> Chord', async ({ page }) => {
   const modeDisplay = page.locator('[data-display="mode"]');
   const cycleBtn = page.locator('[data-action="mode-cycle"]');
@@ -97,6 +103,38 @@ test('Arpeggio mode sequences the chord one note at a time instead of sounding i
   expect(laterActive).toHaveLength(1);
 
   await releaseKey(page, 'j');
+  await page.click('[data-action="mode-cycle"]'); // Arpeggio -> Lead
+  await page.click('[data-action="mode-cycle"]'); // Lead -> Chord
+});
+
+test('arpeggio steps record at their own exact timing, never colliding onto the quantize grid even at a fast tempo', async ({
+  page,
+}) => {
+  // Regression case: quantizing an arpeggio step's onset (a human-timing
+  // concern -- see loop.js's recordEvent -- that doesn't apply to a pattern
+  // already locked to the tempo grid) could round two neighboring 16th-note
+  // steps onto the identical quantized instant, especially at a fast tempo
+  // where the absolute gap between steps shrinks -- audible as a clipped or
+  // even fully dropped note on every loop repeat.
+  const bpmInput = page.locator('[data-display="bpm"]');
+  await bpmInput.click();
+  await bpmInput.fill('240'); // top of the range -- steps every 62.5ms
+  await bpmInput.press('Enter');
+
+  await page.click('[data-action="mode-cycle"]'); // Chord -> Arpeggio
+
+  await holdKey(page, 'Space');
+  await holdKey(page, 'j');
+  await page.waitForTimeout(500); // several fast steps
+  await releaseKey(page, 'Space');
+  await releaseKey(page, 'j');
+
+  const events = await page.evaluate(async () => (await import('/js/input.js')).recorder.events);
+  const mainOnEvents = events.filter((e) => e.type === 'on' && e.track === 'main');
+  expect(mainOnEvents.length).toBeGreaterThan(3); // several steps actually got recorded
+  const times = mainOnEvents.map((e) => e.t);
+  expect(new Set(times).size).toBe(times.length); // no two steps collided onto the same instant
+
   await page.click('[data-action="mode-cycle"]'); // Arpeggio -> Lead
   await page.click('[data-action="mode-cycle"]'); // Lead -> Chord
 });

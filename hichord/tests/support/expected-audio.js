@@ -3,7 +3,7 @@
 // Audio -- both modules are safe to import directly under Node) rather than
 // a hand-copied table. If theory.js's chord/variant shapes or audio.js's
 // buildChord ever change, these expectations move with them automatically.
-import { buildChord, VOICES } from '../../js/audio.js';
+import { buildChord, VOICES, DEFAULT_VOICE_INDEX } from '../../js/audio.js';
 
 // Node's V8 and the Chromium build Playwright drives compute Math.pow a few
 // ULPs apart, so comparing raw floats against what the browser's probe
@@ -44,12 +44,12 @@ export function mergedMidiNotes(keyPc, degreeIndices, variantId) {
 }
 
 /** Expected oscillator frequencies for one held chord button + variant. */
-export function expectedChordFrequencies(keyPc, degreeIndex, variantId, voiceIndex = 0) {
+export function expectedChordFrequencies(keyPc, degreeIndex, variantId, voiceIndex = DEFAULT_VOICE_INDEX) {
   return expandToOscillatorFrequencies(chordMidiNotes(keyPc, degreeIndex, variantId), voiceIndex);
 }
 
 /** Expected oscillator frequencies for several chord buttons held at once. */
-export function expectedMergedFrequencies(keyPc, degreeIndices, variantId, voiceIndex = 0) {
+export function expectedMergedFrequencies(keyPc, degreeIndices, variantId, voiceIndex = DEFAULT_VOICE_INDEX) {
   return expandToOscillatorFrequencies(mergedMidiNotes(keyPc, degreeIndices, variantId), voiceIndex);
 }
 
@@ -60,7 +60,7 @@ export function expectedMergedFrequencies(keyPc, degreeIndices, variantId, voice
  * untouched -- no start, no stop -- only pitches that dropped out stop, and
  * only pitches that are newly wanted start.
  */
-export function expectedTransition(beforeNotes, afterNotes, voiceIndex = 0) {
+export function expectedTransition(beforeNotes, afterNotes, voiceIndex = DEFAULT_VOICE_INDEX) {
   const before = new Set(beforeNotes);
   const after = new Set(afterNotes);
   return {

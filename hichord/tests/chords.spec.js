@@ -11,6 +11,12 @@ import {
 } from './support/expected-audio.js';
 import { CHORD_KEYS } from '../js/input.js';
 
+// Bass now defaults on (see bass.spec.js) -- turned off here so exact
+// chord/frequency assertions below match plain chord math, not chord+bass.
+test.beforeEach(async ({ page }) => {
+  await page.click('[data-action="bass-toggle"]');
+});
+
 test.describe('chord buttons (key of C, default voice)', () => {
   for (const [degreeIndex, { code, label }] of CHORD_KEYS.entries()) {
     test(`holding ${label} sounds its triad and releasing stops it`, async ({ page }) => {

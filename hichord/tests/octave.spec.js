@@ -7,6 +7,12 @@ import { holdKey, releaseKey } from './support/interactions.js';
 import { chordMidiNotes, expectedTransition } from './support/expected-audio.js';
 import { buildChord } from '../js/audio.js';
 
+// Bass now defaults on (see bass.spec.js) -- turned off here so exact
+// frequency-diff assertions below match plain chord math, not chord+bass.
+test.beforeEach(async ({ page }) => {
+  await page.click('[data-action="bass-toggle"]');
+});
+
 test('pressing ] while a chord is already sounding shifts its pitch up an octave, live', async ({ page }) => {
   await holdKey(page, 'j'); // degree 0, I, major triad
 

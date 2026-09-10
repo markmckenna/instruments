@@ -38,7 +38,7 @@ test.describe('Tempo (pure logic, no browser/audio needed)', () => {
 
 test('page loads with the documented tempo defaults', async ({ page }) => {
   await expect(page.locator('[data-display="bpm"]')).toHaveValue('120');
-  await expect(page.locator('[data-display="quantize"]')).toHaveText('1/32');
+  await expect(page.locator('[data-display="quantize"]')).toHaveText('1/64');
   await expect(page.locator('[data-action="click-toggle"]')).not.toHaveClass(/active/);
 });
 
@@ -127,15 +127,46 @@ test('tapping the click button four times in a row sets the bpm to match the tap
   // the cue landed near 200, not exactly.
   expect(bpm).toBeGreaterThanOrEqual(150);
   expect(bpm).toBeLessThanOrEqual(220);
+  // The tap that actually completes the cue always leaves the click on.
+  await expect(clickBtn).toHaveClass(/active/);
+});
+
+test('every tap on the click button plays an audible click immediately, even one that turns the click off', async ({
+  page,
+}) => {
+  const clickBtn = page.locator('[data-action="click-toggle"]');
+
+  const firstMark = await markAudio(page);
+  await clickBtn.click(); // off -> on
+  expect((await audioEventsSince(page, firstMark)).filter((e) => e.type === 'click')).toHaveLength(1);
+
+  const secondMark = await markAudio(page);
+  await clickBtn.click(); // on -> off -- still plays one, so you can hear the tap itself either way
+  await expect(clickBtn).not.toHaveClass(/active/);
+  expect((await audioEventsSince(page, secondMark)).filter((e) => e.type === 'click')).toHaveLength(1);
+});
+
+test('a tap gap slower than 80bpm is not read as a tempo cue, just a toggle', async ({ page }) => {
+  const bpmDisplay = page.locator('[data-display="bpm"]');
+  const clickBtn = page.locator('[data-action="click-toggle"]');
+
+  // 0.8s apart -> 75bpm, just under the 80bpm floor -- too easy to mistake
+  // for separate on/off toggles rather than a deliberate steady tap.
+  for (let i = 0; i < 4; i++) {
+    await clickBtn.click();
+    if (i < 3) await page.waitForTimeout(800);
+  }
+
+  await expect(bpmDisplay).toHaveValue('120'); // untouched -- no cue fired
 });
 
 test('the quantize control halves/doubles the displayed resolution', async ({ page }) => {
   const quantizeDisplay = page.locator('[data-display="quantize"]');
-  await page.click('[data-action="quantize-down"]'); // coarser: 1/32 -> 1/16
-  await expect(quantizeDisplay).toHaveText('1/16');
-  await page.click('[data-action="quantize-up"]'); // finer: 1/16 -> 1/32
+  await page.click('[data-action="quantize-down"]'); // coarser: 1/64 -> 1/32
+  await expect(quantizeDisplay).toHaveText('1/32');
   await page.click('[data-action="quantize-up"]'); // finer: 1/32 -> 1/64
-  await expect(quantizeDisplay).toHaveText('1/64');
+  await page.click('[data-action="quantize-up"]'); // finer: 1/64 -> 1/128
+  await expect(quantizeDisplay).toHaveText('1/128');
 });
 
 test('the bpm control also responds to the +/- keyboard shortcut', async ({ page }) => {
@@ -163,10 +194,10 @@ async function holdShiftedBracket(page, code) {
 
 test('the quantize control also responds to the {/} keyboard shortcut', async ({ page }) => {
   const quantizeDisplay = page.locator('[data-display="quantize"]');
-  await holdShiftedBracket(page, 'BracketLeft'); // coarser: 1/32 -> 1/16
-  await expect(quantizeDisplay).toHaveText('1/16');
-  await holdShiftedBracket(page, 'BracketRight'); // finer: 1/16 -> 1/32
+  await holdShiftedBracket(page, 'BracketLeft'); // coarser: 1/64 -> 1/32
   await expect(quantizeDisplay).toHaveText('1/32');
+  await holdShiftedBracket(page, 'BracketRight'); // finer: 1/32 -> 1/64
+  await expect(quantizeDisplay).toHaveText('1/64');
 });
 
 test('{ and } -- with a chord held, they quantize instead of octave-shifting it', async ({ page }) => {
@@ -182,7 +213,7 @@ test('{ and } -- with a chord held, they quantize instead of octave-shifting it'
 
   expect(events).toHaveLength(0); // no octave shift fired
   await expect(page.locator('[data-base="KeyJ"] .chord-name')).toHaveText('C'); // pitch unchanged
-  await expect(page.locator('[data-display="quantize"]')).toHaveText('1/64'); // finer: 1/32 -> 1/64
+  await expect(page.locator('[data-display="quantize"]')).toHaveText('1/128'); // finer: 1/64 -> 1/128
 
   await releaseKey(page, 'j');
 });
@@ -190,8 +221,9 @@ test('{ and } -- with a chord held, they quantize instead of octave-shifting it'
 test('recorded loop events snap to the quantize grid, live play is never touched', async ({ page }) => {
   // Coarsen the grid so a deliberately-off-beat press lands somewhere
   // clearly different from where it was actually pressed, making the snap
-  // easy to detect: 1/32 -> 1/16 -> 1/8 -> 1/4 note. A quarter note *is* the
-  // beat at 120bpm, so this grid's step is 0.5s.
+  // easy to detect: 1/64 -> 1/32 -> 1/16 -> 1/8 -> 1/4 note. A quarter note
+  // *is* the beat at 120bpm, so this grid's step is 0.5s.
+  await page.click('[data-action="quantize-down"]');
   await page.click('[data-action="quantize-down"]');
   await page.click('[data-action="quantize-down"]');
   await page.click('[data-action="quantize-down"]');
@@ -221,6 +253,7 @@ test('rapid chord changes at a coarse quantize grid record every chord, none sil
   // here, which is exactly where silently dropping a note on collision
   // (see loop.js's recordEvent comment) would erase a chord that was
   // genuinely played.
+  await page.click('[data-action="quantize-down"]');
   await page.click('[data-action="quantize-down"]');
   await page.click('[data-action="quantize-down"]');
   await page.click('[data-action="quantize-down"]');
@@ -290,9 +323,9 @@ test('the metronome click plays a steady click on every beat while enabled', asy
   const clicks = (await audioEventsSince(page, mark)).filter((e) => e.type === 'click');
   expect(clicks.length).toBeGreaterThanOrEqual(2);
 
-  const disableMark = await markAudio(page);
-  await clickBtn.click();
+  await clickBtn.click(); // this tap itself always plays one manual click (see toggleClick) -- marked after, not before
   await expect(clickBtn).not.toHaveClass(/active/);
+  const disableMark = await markAudio(page);
   await page.waitForTimeout(600);
   const afterDisable = (await audioEventsSince(page, disableMark)).filter((e) => e.type === 'click');
   expect(afterDisable).toHaveLength(0);

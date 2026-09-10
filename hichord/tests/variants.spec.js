@@ -10,6 +10,12 @@ import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js
 import { holdKey, releaseKey } from './support/interactions.js';
 import { chordMidiNotes, expectedTransition } from './support/expected-audio.js';
 
+// Bass now defaults on (see bass.spec.js) -- turned off here so exact
+// frequency-diff assertions below match plain chord math, not chord+bass.
+test.beforeEach(async ({ page }) => {
+  await page.click('[data-action="bass-toggle"]');
+});
+
 function eventFreqs(events, type) {
   return events.filter((e) => e.type === type).map((e) => e.freq).sort((a, b) => a - b);
 }

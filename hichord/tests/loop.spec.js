@@ -167,6 +167,8 @@ test('tapping Space while a loop is playing cancels and clears it, not just stop
 });
 
 test('cycling voices after recording reshapes live play but not the loop already laid down', async ({ page }) => {
+  await page.click('[data-action="bass-toggle"]'); // bass defaults on -- off here so this stays plain chord math
+
   await holdKey(page, 'Space');
   await holdKey(page, 'j');
   await page.waitForTimeout(150);
@@ -174,13 +176,13 @@ test('cycling voices after recording reshapes live play but not the loop already
   await releaseKey(page, 'j');
 
   // Switch voice *after* the loop was recorded (default voice at record time
-  // was Soft Pad, voiceIndex 0).
+  // is Warm Pad, voiceIndex 3).
   await page.click('[data-action="voice-next"]');
-  await expect(page.locator('[data-display="voice"]')).toHaveText('Pluck');
+  await expect(page.locator('[data-display="voice"]')).toHaveText('Soft Pad');
 
   // Loop length is 0.5s (one beat at 120bpm, see the loop-length test above);
   // 1.2s spans more than one replay, so dedupe before comparing -- it's the
-  // *set* of frequencies used that must match Soft Pad, not the count. Dedupe
+  // *set* of frequencies used that must match Warm Pad, not the count. Dedupe
   // the expected side too: the chord's own root-doubled-an-octave-up note
   // (see audio.js's buildChord) coincidentally shares a frequency with a
   // lower note's own octave-up harmonic partial, so the raw expected list
@@ -194,8 +196,8 @@ test('cycling voices after recording reshapes live play but not the loop already
         .map((e) => e.freq),
     ),
   ].sort((a, b) => a - b);
-  const expected = [...new Set(expectedChordFrequencies(0, 0, 'neutral', 0))].sort((a, b) => a - b);
-  expect(replayed).toEqual(expected); // still Soft Pad -- the voice in effect when it was recorded, not the now-current Pluck
+  const expected = [...new Set(expectedChordFrequencies(0, 0, 'neutral', 3))].sort((a, b) => a - b);
+  expect(replayed).toEqual(expected); // still Warm Pad -- the voice in effect when it was recorded, not the now-current Soft Pad
 });
 
 test('a chord held live keeps sounding on top of loop playback', async ({ page }) => {
