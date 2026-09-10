@@ -97,31 +97,56 @@ const CLICK_DURATION = 0.02; // seconds -- short enough to read as a click, not 
 // voicing there regardless of how far the tracking is turned up.
 const KEY_TRACK_REFERENCE_MIDI = 60;
 
+// Every bounded per-effect-parameter cache below (the reverb impulse, the
+// distortion curve) is capped at this many entries so a widely-randomized
+// "base~range" decay/amount (see voices.js's docs on each) can't grow it
+// unboundedly over a long session -- comfortably more than any hand-tuned
+// voice needs distinct values for, without letting a session-long stream of
+// distinct rolled values accumulate forever.
+const EFFECT_CACHE_LIMIT = 16;
+
+/**
+ * Get `key` from `cache` (a Map used as an LRU), building and storing it via
+ * `build()` on a miss. A hit is moved to the end of `cache`'s iteration
+ * order (Map preserves insertion order, and re-inserting an existing key
+ * moves it there) so the least-recently-used entry is always the first one
+ * iterated -- which is exactly what gets evicted, once storing a new miss
+ * would grow the cache past EFFECT_CACHE_LIMIT.
+ */
+function cached(cache, key, build) {
+  const hit = cache.get(key);
+  if (hit !== undefined) {
+    cache.delete(key);
+    cache.set(key, hit);
+    return hit;
+  }
+  if (cache.size >= EFFECT_CACHE_LIMIT) cache.delete(cache.keys().next().value);
+  const value = build();
+  cache.set(key, value);
+  return value;
+}
+
 // The standard Web Audio "makeDistortionCurve" formula, straight from MDN's
 // own createWaveShaper() example --
 // https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/createWaveShaper.
 // `amount` is WebAudio's own informal "k" in that formula (roughly 0 = clean
-// through 100+ = hard clip). Memoized by `amount` (rounded) on the calling
-// AudioEngine the same way _reverbImpulse memoizes by decay (see its own
-// comment, and voices.js's distortion docs for why a randomized `amount` is
-// a bad fit for this): the curve is only ever read by a WaveShaperNode,
-// never mutated, so every note wanting the same amount can share one
-// instead of each rebuilding its own.
+// through 100+ = hard clip). Cached by `amount` (rounded) the same way
+// _reverbImpulse caches by decay: the curve is only ever read by a
+// WaveShaperNode, never mutated, so every note wanting the same amount can
+// share one instead of each rebuilding its own.
 function distortionCurve(engine, amount) {
   const key = Math.round(amount * 1000);
-  let curve = engine._distortionCurveCache.get(key);
-  if (curve) return curve;
-
-  const k = amount;
-  const samples = 44100;
-  curve = new Float32Array(samples);
-  const deg = Math.PI / 180;
-  for (let i = 0; i < samples; i++) {
-    const x = (i * 2) / samples - 1;
-    curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
-  }
-  engine._distortionCurveCache.set(key, curve);
-  return curve;
+  return cached(engine._distortionCurveCache, key, () => {
+    const k = amount;
+    const samples = 44100;
+    const curve = new Float32Array(samples);
+    const deg = Math.PI / 180;
+    for (let i = 0; i < samples; i++) {
+      const x = (i * 2) / samples - 1;
+      curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+    }
+    return curve;
+  });
 }
 
 export class AudioEngine {
@@ -352,8 +377,8 @@ export class AudioEngine {
   }
 
   /**
-   * Memoized by decaySeconds (rounded -- see voices.js's reverb docs for why
-   * a randomized `decay` is a bad fit for this): a ConvolverNode's buffer is
+   * Cached by decaySeconds (rounded -- see voices.js's reverb docs for why a
+   * randomized `decay` is a bad fit for this): a ConvolverNode's buffer is
    * only ever read during convolution, never mutated, so every note wanting
    * the same decay can safely share one impulse instead of each rebuilding
    * its own from scratch -- a fresh 2-channel, multi-second Float32Array
@@ -363,20 +388,18 @@ export class AudioEngine {
    */
   _reverbImpulse(decaySeconds) {
     const key = Math.round(decaySeconds * 1000);
-    let impulse = this._reverbImpulseCache.get(key);
-    if (impulse) return impulse;
-
-    const rate = this.ctx.sampleRate;
-    const length = Math.max(1, Math.round(rate * Math.max(decaySeconds, 0.01)));
-    impulse = this.ctx.createBuffer(2, length, rate);
-    for (let ch = 0; ch < impulse.numberOfChannels; ch++) {
-      const data = impulse.getChannelData(ch);
-      for (let i = 0; i < length; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
+    return cached(this._reverbImpulseCache, key, () => {
+      const rate = this.ctx.sampleRate;
+      const length = Math.max(1, Math.round(rate * Math.max(decaySeconds, 0.01)));
+      const impulse = this.ctx.createBuffer(2, length, rate);
+      for (let ch = 0; ch < impulse.numberOfChannels; ch++) {
+        const data = impulse.getChannelData(ch);
+        for (let i = 0; i < length; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
+        }
       }
-    }
-    this._reverbImpulseCache.set(key, impulse);
-    return impulse;
+      return impulse;
+    });
   }
 
   /**

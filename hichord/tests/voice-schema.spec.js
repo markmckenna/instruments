@@ -530,11 +530,8 @@ test.describe("AudioEngine's envelope/effects graph (fake AudioContext -- no rea
 
     // Regression: a multi-note chord on a reverb voice (e.g. Airy Pad) used to
     // rebuild a brand-new multi-second stereo impulse response from scratch
-    // for *every* sounding note -- fine for one note, but hammering keys
-    // quickly (each press sounding a several-note chord) piled up enough of
-    // this synchronous main-thread buffer-building work to stall playback
-    // entirely. Every note wanting the same decay must share one impulse
-    // instead.
+    // for *every* sounding note. Every note wanting the same decay must
+    // share one impulse instead.
     test('reverb impulse responses are cached by decay, not rebuilt per note', () => {
       const engine = fakeEngine();
       engine._playNote(60, noteWithEffect({ type: 'reverb', decay: 1, wet: 0.4 }), 0, 1);
@@ -546,6 +543,39 @@ test.describe("AudioEngine's envelope/effects graph (fake AudioContext -- no rea
       expect(engine.ctx.convolvers[0].buffer).toBe(engine.ctx.convolvers[1].buffer);
       // ...while the differently-decayed third note gets its own.
       expect(engine.ctx.convolvers[2].buffer).not.toBe(engine.ctx.convolvers[0].buffer);
+    });
+
+    // Regression: a widely-randomized "base~range" decay (see voices.js's
+    // reverb docs) rolls a distinct value basically every note, which would
+    // otherwise grow the cache above by one entry per note for as long as
+    // the session runs. Playing enough distinct decays must evict the
+    // least-recently-used one instead of caching every value ever seen.
+    test('the reverb impulse cache is bounded -- old decays get evicted, not kept forever', () => {
+      const engine = fakeEngine();
+      engine._playNote(60, noteWithEffect({ type: 'reverb', decay: 1, wet: 0.4 }), 0, 1);
+      const firstBuffer = engine.ctx.convolvers[0].buffer;
+
+      for (let i = 0; i < 40; i++) {
+        engine._playNote(60, noteWithEffect({ type: 'reverb', decay: 2 + i * 0.01, wet: 0.4 }), 0, 1);
+      }
+
+      engine._playNote(60, noteWithEffect({ type: 'reverb', decay: 1, wet: 0.4 }), 0, 1);
+      const rebuiltBuffer = engine.ctx.convolvers[engine.ctx.convolvers.length - 1].buffer;
+      expect(rebuiltBuffer).not.toBe(firstBuffer); // decay 1 was evicted, so this is a fresh buffer
+    });
+
+    test('the distortion curve cache is bounded -- old amounts get evicted, not kept forever', () => {
+      const engine = fakeEngine();
+      engine._playNote(60, noteWithEffect({ type: 'distortion', amount: 10, wet: 1 }), 0, 1);
+      const firstCurve = engine.ctx.shapers[0].curve;
+
+      for (let i = 0; i < 40; i++) {
+        engine._playNote(60, noteWithEffect({ type: 'distortion', amount: 20 + i, wet: 1 }), 0, 1);
+      }
+
+      engine._playNote(60, noteWithEffect({ type: 'distortion', amount: 10, wet: 1 }), 0, 1);
+      const rebuiltCurve = engine.ctx.shapers[engine.ctx.shapers.length - 1].curve;
+      expect(rebuiltCurve).not.toBe(firstCurve); // amount 10 was evicted, so this is a fresh curve
     });
   });
 });

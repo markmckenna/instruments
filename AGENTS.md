@@ -64,6 +64,11 @@ note it in `PROCESS.md` and as a comment in the promoted code itself.
   organization without tooling, and any future bundler adoption is additive.
 - Web Audio API directly for sound; no audio framework dependency until
   there's a concrete reason.
+- Any cache or collection whose size tracks something unbounded (distinct
+  values seen over a session, notes ever played, etc.) needs an eviction
+  strategy from the start, not just a `Map` that only ever grows -- see
+  `hichord/js/audio.js`'s `cached()` helper (an LRU capped at
+  `EFFECT_CACHE_LIMIT`) for the pattern to reuse.
 - Pointer Events (not separate mouse/touch handlers) for on-screen controls,
   so desktop and mobile share one code path. Keyboard handling is additive on
   top of that for desktop, using `event.code` (physical key), not
