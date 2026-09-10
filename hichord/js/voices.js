@@ -103,16 +103,8 @@ function filterEffectParams(type) {
 //    https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/createWaveShaper.
 //    `amount` (WebAudio's own `k` in that formula -- roughly 0 (clean) to
 //    100+ (hard clip)), `wet` (0-1 mix).
-//  - randomize: not a Web Audio processing node at all -- it patches a
-//    named `property` on the effect's own enclosing voice or oscillator,
-//    randomly within +/- `range` of that property's own value, freshly per
-//    note (same idea as the "base~range" notation above, but as its own
-//    effect entry instead of inline on the field -- useful when the field
-//    itself is already busy holding a fixed base value you don't want to
-//    also rewrite). See AudioEngine._resolveSpec.
 const EFFECT_PARAMS = {
   ...Object.fromEntries(FILTER_TYPES.map((type) => [type, filterEffectParams(type)])),
-  randomize: ['property', 'range'],
   reverb: ['decay', 'wet'],
   tremolo: ['rate', 'depth'],
   delay: ['time', 'feedback', 'wet'],
@@ -174,9 +166,7 @@ function normalizeEffect(effect, context) {
   const defaults = EFFECT_DEFAULTS[effect.type] || {};
   const out = { type: effect.type };
   for (const key of knownParams) {
-    // `property` (randomize's own target-field name) is a string, not a
-    // numeric field -- everything else here is.
-    out[key] = key === 'property' ? effect[key] : parseNumeric(effect[key] ?? defaults[key]);
+    out[key] = parseNumeric(effect[key] ?? defaults[key]);
   }
   if (supportsEnvelope) {
     out.envelope = parseEnvelope(effect.envelope);

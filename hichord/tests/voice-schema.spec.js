@@ -4,7 +4,7 @@
 // on its own AudioParam wired in series with whatever contains it (which is
 // what lets nested envelopes compound without this module doing any
 // multiplication itself), that a filter's keyTrack/envAmount scale and sweep
-// its cutoff correctly, and that pan/randomize/the "base~range" notation all
+// its cutoff correctly, and that pan and the "base~range" notation both
 // resolve once per note. See voices.js's own module comment for the schema
 // this exercises.
 import { test, expect } from './support/fixtures.js';
@@ -26,7 +26,7 @@ function withWarnCaptured(fn) {
 
 // Runs `fn()` with Math.random() pinned to `value`, restoring the real one
 // afterward even if `fn` throws -- lets a test assert on an exact resolved
-// "base~range"/randomize-effect value instead of just "it's in range".
+// "base~range" value instead of just "it's in range".
 function withFixedRandom(value, fn) {
   const original = Math.random;
   Math.random = () => value;
@@ -142,14 +142,6 @@ test.describe('normalizeVoice: unrecognized fields degrade instead of breaking t
     );
     expect(voice.effects[0]).not.toHaveProperty('gain');
     expect(warnings.some((w) => w.includes('unknown "gain"'))).toBe(true);
-  });
-
-  test('a randomize effect normalizes its property/range and, unlike a filter, takes no envelope of its own', () => {
-    const { result: voice, warnings } = withWarnCaptured(() =>
-      normalizeVoice({ ...baseVoice(), effects: [{ type: 'randomize', property: 'pan', range: 2, envelope: '0 0 1 0' }] }),
-    );
-    expect(voice.effects[0]).toEqual({ type: 'randomize', property: 'pan', range: 2 });
-    expect(warnings.some((w) => w.includes('unknown "envelope"'))).toBe(true);
   });
 
   test('reverb/tremolo/delay/distortion each normalize to their own documented params and defaults', () => {
@@ -455,23 +447,21 @@ test.describe("AudioEngine's envelope/effects graph (fake AudioContext -- no rea
     expect(panners[1].pan.value).toBe(-0.6);
   });
 
-  test('a "base~range" field and a randomize effect both resolve once per note, the randomize effect layering on top of its own field\'s resolved value', () => {
+  test('a "base~range" field resolves once per note, held steady for that note\'s whole graph', () => {
     const engine = fakeEngine();
     withFixedRandom(1, () => {
       // Math.random() pinned to 1 -> every roll lands at its base+range edge.
       const voice = {
         pan: parseNumeric('0~1'),
         envelope: { attack: 0, decay: 0, sustain: 1, release: 0 },
-        effects: [{ type: 'randomize', property: 'pan', range: 2 }],
+        effects: [],
         oscillators: [{ type: 'sine', detune: parseNumeric('0~5'), gain: 1, octave: 0, pan: 0, effects: [] }],
       };
       engine._playNote(60, voice, 0, 1);
     });
 
-    // voice.pan '0~1' resolves to 1, then the voice's own randomize effect
-    // (range 2) overrides it again, around that resolved value: 1 + 2 = 3.
-    expect(engine.ctx.panners[0].pan.value).toBe(3);
-    expect(engine.ctx.oscillators[0].detune.value).toBe(5); // 0 + 5, untouched by any randomize effect
+    expect(engine.ctx.panners[0].pan.value).toBe(1); // voice.pan '0~1' -> 0 + 1
+    expect(engine.ctx.oscillators[0].detune.value).toBe(5); // oscillator detune '0~5' -> 0 + 5
   });
 
   test.describe('the newer effect types build the Web Audio nodes they document', () => {

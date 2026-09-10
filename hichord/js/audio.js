@@ -181,24 +181,15 @@ export class AudioEngine {
 
   /**
    * Resolve `fields` on `spec` (a voice or an oscillator) for one note: any
-   * "base~range" value rolls a fresh number now, held steady for as long as
-   * this note sounds (_resolveField above); then any `randomize` effect
-   * among `effects` overrides its own named field the same way, around
-   * whatever that field already resolved to -- see voices.js's EFFECT_PARAMS
-   * comment on the `randomize` effect for why that's a separate mechanism
-   * from the inline notation instead of just a second way to spell it.
-   * `spec`/`effects` are never mutated; a plain `{field: value}` map comes
-   * back for the caller to read instead.
+   * "base~range" value (see voices.js's parseNumeric) rolls a fresh number
+   * now, held steady for as long as this note sounds -- see _resolveField
+   * above, which is what actually does the rolling. `spec` is never
+   * mutated; a plain `{field: value}` map comes back for the caller to read
+   * instead.
    */
-  _resolveSpec(spec, fields, effects) {
+  _resolveSpec(spec, fields) {
     const resolved = {};
     for (const field of fields) resolved[field] = this._resolveField(spec[field]);
-    for (const effect of effects) {
-      if (effect.type !== 'randomize') continue;
-      const base = resolved[effect.property];
-      if (typeof base !== 'number') continue; // targets a field this spec doesn't have, or isn't numeric -- ignore rather than crash the note
-      resolved[effect.property] = base + (Math.random() * 2 - 1) * effect.range;
-    }
     return resolved;
   }
 
@@ -258,15 +249,10 @@ export class AudioEngine {
    * the MIDI pitch a filter effect's own `keyTrack` measures its distance
    * from -- the note itself for a voice-level effect, or that oscillator's
    * own octave-shifted pitch for one of its own effects (see _playNote).
-   *
-   * `randomize` (see voices.js) patches a field on `spec` itself rather than
-   * building a processing node of its own -- see _resolveSpec, which is
-   * where it actually gets applied -- so it's skipped here entirely.
    */
   _buildEffectsChain(effects, destination, when, envelopes, auxOscillators, trackingMidi) {
     let entry = destination;
     for (let i = effects.length - 1; i >= 0; i--) {
-      if (effects[i].type === 'randomize') continue;
       entry = this._createEffectNode(effects[i], entry, when, envelopes, auxOscillators, trackingMidi);
     }
     return entry;
@@ -435,7 +421,7 @@ export class AudioEngine {
     const inner = [];
     const aux = [];
 
-    const voiceValues = this._resolveSpec(voice, ['pan'], voice.effects);
+    const voiceValues = this._resolveSpec(voice, ['pan']);
     voicePan.pan.value = voiceValues.pan;
 
     // Voice-level effects sit between the mixed oscillators and the voice's
@@ -446,7 +432,7 @@ export class AudioEngine {
     const voiceEntry = this._buildEffectsChain(voice.effects, noteGain, when, inner, aux, midi);
 
     const oscs = voice.oscillators.map((spec) => {
-      const oscValues = this._resolveSpec(spec, ['detune', 'gain', 'octave', 'pan'], spec.effects);
+      const oscValues = this._resolveSpec(spec, ['detune', 'gain', 'octave', 'pan']);
 
       const osc = ctx.createOscillator();
       osc.type = spec.type;

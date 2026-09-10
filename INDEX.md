@@ -28,7 +28,7 @@ or planning a feature; update it whenever a concept is added or removed.
   with detune/gain/octave/pan, a nestable envelope/effects chain (voice,
   oscillator, and per-effect), every Web Audio filter type exposed as its own
   effect (resonance/keyTrack/envAmount), reverb/tremolo/delay/distortion, and
-  the "base~range"/`randomize` per-note randomization notation. Pure
+  the "base~range" per-note randomization notation. Pure
   data/validation, no Web Audio node graph. [`hichord/js/voices.js`](hichord/js/voices.js)
 - **Audio engine** — turning an abstract chord/variant/inversion/octave-shift
   and playback mode into actual MIDI pitches and then into a Web Audio node
