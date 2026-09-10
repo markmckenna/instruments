@@ -28,8 +28,10 @@ or planning a feature; update it whenever a concept is added or removed.
   and playback mode into actual MIDI pitches and then into sound:
   independent per-voice polyphony where each note attacks/releases only when
   it actually needs to (nothing retriggers just because the chord around it
-  changed), envelope shaping, and gain staging to avoid clipping.
-  [`hichord/js/audio.js`](hichord/js/audio.js)
+  changed), gain staging to avoid clipping, and a nestable envelope/effects
+  chain (voice, oscillator, and per-effect, e.g. a filter's own cutoff
+  envelope) that compounds by simply wiring each level's automation in
+  series. [`hichord/js/audio.js`](hichord/js/audio.js)
 - **Input handling** — translating keyboard/pointer input into "what chord +
   variant is currently held" (polyphonic chord buttons, a single-variant
   "joystick" control, per-key octave/inversion/locked-modifier state, a

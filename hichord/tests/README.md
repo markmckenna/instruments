@@ -23,6 +23,11 @@ make check
 
 Or standalone: `npm ci && npx playwright install firefox && npx playwright test`.
 
+Iterating on one test or one bug: `make test-one FILE=tests/loop.spec.js` (add
+`GREP="test name"` to narrow further) runs just that file directly through
+Playwright instead of the full suite -- see the Makefile for what it does
+and why.
+
 ### Running under a sandboxed agent
 
 Firefox itself (unlike Chromium -- see `../playwright.config.js`'s own
@@ -127,6 +132,10 @@ test-host-stop` when done.
   the metronome click itself and its tap-tempo cue (four taps in a row).
 - `keyboard-and-safety.spec.js` -- OS key-repeat is ignored, and the
   blur/visibilitychange "panic" safety valve releases a held chord.
+- `voice-schema.spec.js` -- pure logic, no browser audio needed:
+  `parseEnvelope`'s shorthand-string parsing, and that AudioEngine wires each
+  level's envelope (voice/oscillator/effect) onto its own AudioParam in
+  series with its parent, which is what makes nested envelopes compound.
 
 Not covered here (left to the manual smoke test in `../README.md`): actually
 *hearing* the result, touch-specific browser quirks (text selection/callout
