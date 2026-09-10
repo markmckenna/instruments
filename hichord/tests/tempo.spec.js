@@ -230,7 +230,15 @@ test('recorded loop events snap to the quantize grid, live play is never touched
   await expect(page.locator('[data-display="quantize"]')).toHaveText('1/4');
 
   await holdKey(page, 'Space');
-  await page.waitForTimeout(220); // press J well off the 0.5s grid (nearer 0 than 0.5)
+  // 100ms, not just-under-the-250ms-midpoint: this only needs to land
+  // *somewhere* clearly nearer 0 than 0.5 to prove the snap, and a wider
+  // margin survives real scheduling jitter from page.waitForTimeout/event
+  // dispatch under a fully-parallel run (a `make check` running all suites
+  // at once, several real Firefox instances) that a tighter margin (this
+  // used to wait 220ms, only 30ms shy of the 250ms midpoint) doesn't --
+  // that's what was actually behind this test occasionally recording 0.5
+  // instead of 0, not a bug in Tempo.quantize() itself.
+  await page.waitForTimeout(100);
   await holdKey(page, 'j');
   await releaseKey(page, 'Space');
   await releaseKey(page, 'j');
@@ -240,7 +248,7 @@ test('recorded loop events snap to the quantize grid, live play is never touched
     return mod.recorder.events;
   });
   const onEvent = events.find((e) => e.type === 'on');
-  // Actually pressed ~0.22s in -- nearer the grid line at 0 than the one at
+  // Actually pressed ~0.1s in -- nearer the grid line at 0 than the one at
   // 0.5s, so quantizing should snap it all the way down to 0, not leave it
   // at the raw, un-snapped timestamp.
   expect(onEvent.t).toBe(0);

@@ -7,6 +7,7 @@ import { holdKey, releaseKey } from './support/interactions.js';
 import { chordMidiNotes, expectedChordFrequencies, expectedTransition } from './support/expected-audio.js';
 import { CIRCLE_OF_FIFTHS, variantChordName, keyDisplayName } from '../js/theory.js';
 import { CHORD_KEYS } from '../js/input.js';
+import { VOICES, DEFAULT_VOICE_INDEX } from '../js/audio.js';
 
 function expectedChordName(keyPc, degreeIndex) {
   return variantChordName(keyPc, degreeIndex, 'neutral'); // neutral variant == the plain diatonic triad name
@@ -79,8 +80,13 @@ test('changing key while a chord is held keeps any shared pitch sounding and swa
 test('changing voice relabels the display and changes what a held chord actually sounds like', async ({
   page,
 }) => {
-  await page.click('[data-action="voice-next"]'); // Warm Pad -> Soft Pad
-  await expect(page.locator('[data-display="voice"]')).toHaveText('Soft Pad');
+  // Derived, not hardcoded to 'Soft Pad'/index 0: this used to assume the
+  // default voice is always second-to-last in VOICES (so cycling forward
+  // wraps around to Soft Pad), which broke the moment a preset was added
+  // after the default without also moving it to stay last.
+  const nextVoiceIndex = (DEFAULT_VOICE_INDEX + 1) % VOICES.length;
+  await page.click('[data-action="voice-next"]');
+  await expect(page.locator('[data-display="voice"]')).toHaveText(VOICES[nextVoiceIndex].name);
 
   const mark = await markAudio(page);
   await holdKey(page, 'j');
@@ -88,7 +94,7 @@ test('changing voice relabels the display and changes what a held chord actually
     .filter((e) => e.type === 'start')
     .map((e) => e.freq)
     .sort((a, b) => a - b);
-  expect(started).toEqual(expectedChordFrequencies(0, 0, 'neutral', 0)); // voiceIndex 0 = Soft Pad
+  expect(started).toEqual(expectedChordFrequencies(0, 0, 'neutral', nextVoiceIndex));
 
   await releaseKey(page, 'j');
 });

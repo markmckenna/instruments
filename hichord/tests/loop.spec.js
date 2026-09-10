@@ -6,7 +6,7 @@
 import { test, expect, markAudio, audioEventsSince } from './support/fixtures.js';
 import { holdKey, releaseKey } from './support/interactions.js';
 import { expectedChordFrequencies } from './support/expected-audio.js';
-import { AudioEngine } from '../js/audio.js';
+import { AudioEngine, VOICES, DEFAULT_VOICE_INDEX } from '../js/audio.js';
 import { LoopRecorder } from '../js/loop.js';
 import { Tempo } from '../js/tempo.js';
 
@@ -175,18 +175,23 @@ test('cycling voices after recording reshapes live play but not the loop already
   await releaseKey(page, 'Space');
   await releaseKey(page, 'j');
 
-  // Switch voice *after* the loop was recorded (default voice at record time
-  // is Warm Pad, voiceIndex 3).
+  // Switch voice *after* the loop was recorded (default voice at record
+  // time is whatever DEFAULT_VOICE_INDEX names -- derived, not hardcoded,
+  // so this doesn't silently drift out of sync with VOICES again the next
+  // time a preset is added/reordered, the way this test previously assumed
+  // "next after the default" is always 'Soft Pad').
+  const nextVoiceIndex = (DEFAULT_VOICE_INDEX + 1) % VOICES.length;
   await page.click('[data-action="voice-next"]');
-  await expect(page.locator('[data-display="voice"]')).toHaveText('Soft Pad');
+  await expect(page.locator('[data-display="voice"]')).toHaveText(VOICES[nextVoiceIndex].name);
 
   // Loop length is 0.5s (one beat at 120bpm, see the loop-length test above);
   // 1.2s spans more than one replay, so dedupe before comparing -- it's the
-  // *set* of frequencies used that must match Warm Pad, not the count. Dedupe
-  // the expected side too: the chord's own root-doubled-an-octave-up note
-  // (see audio.js's buildChord) coincidentally shares a frequency with a
-  // lower note's own octave-up harmonic partial, so the raw expected list
-  // isn't pairwise-distinct here even within a single chord instance.
+  // *set* of frequencies used that must match the recorded voice, not the
+  // count. Dedupe the expected side too: the chord's own
+  // root-doubled-an-octave-up note (see audio.js's buildChord)
+  // coincidentally shares a frequency with a lower note's own octave-up
+  // harmonic partial, so the raw expected list isn't pairwise-distinct here
+  // even within a single chord instance.
   const mark = await markAudio(page);
   await page.waitForTimeout(1200);
   const replayed = [
@@ -196,8 +201,8 @@ test('cycling voices after recording reshapes live play but not the loop already
         .map((e) => e.freq),
     ),
   ].sort((a, b) => a - b);
-  const expected = [...new Set(expectedChordFrequencies(0, 0, 'neutral', 3))].sort((a, b) => a - b);
-  expect(replayed).toEqual(expected); // still Warm Pad -- the voice in effect when it was recorded, not the now-current Soft Pad
+  const expected = [...new Set(expectedChordFrequencies(0, 0, 'neutral', DEFAULT_VOICE_INDEX))].sort((a, b) => a - b);
+  expect(replayed).toEqual(expected); // still the voice in effect when it was recorded, not the now-current next one
 });
 
 test('a chord held live keeps sounding on top of loop playback', async ({ page }) => {
