@@ -122,6 +122,7 @@ export class AudioEngine {
     this.clickBuffer = null; // precomputed noise burst reused by every playClick() -- see unlock()
     this.voiceIndex = DEFAULT_VOICE_INDEX;
     this.active = new Map(); // voiceId -> array of sounding notes (see _playNote), one entry per polyphonic voice
+    this._reverbImpulseCache = new Map(); // decaySeconds (rounded, ms) -> AudioBuffer, see _reverbImpulse
   }
 
   // Must be triggered from within a user-gesture handler (keydown/pointerdown),
@@ -339,16 +340,35 @@ export class AudioEngine {
     return this._wetDryMix(convolver, convolver, destination, this._resolveField(effect.wet));
   }
 
+  /**
+   * Memoized by decaySeconds (rounded -- a randomized "base~range" decay
+   * would otherwise roll a distinct cache key basically every note): a
+   * ConvolverNode's buffer is only ever read during convolution, never
+   * mutated, so every note wanting the same decay can safely share one
+   * impulse instead of each rebuilding its own from scratch. Rebuilding it
+   * per note used to mean a fresh 2-channel, multi-second Float32Array
+   * (hundreds of thousands of Math.random()/Math.pow() calls) synchronously
+   * on the main thread for *every sounding note* -- fine for a single
+   * chord, but hammering keys quickly (each press sounding a several-note
+   * chord) piled these up faster than the thread that also schedules audio
+   * could keep discharging them, reading as a total playback lockup with
+   * nothing thrown to log.
+   */
   _reverbImpulse(decaySeconds) {
+    const key = Math.round(decaySeconds * 1000);
+    let impulse = this._reverbImpulseCache.get(key);
+    if (impulse) return impulse;
+
     const rate = this.ctx.sampleRate;
     const length = Math.max(1, Math.round(rate * Math.max(decaySeconds, 0.01)));
-    const impulse = this.ctx.createBuffer(2, length, rate);
+    impulse = this.ctx.createBuffer(2, length, rate);
     for (let ch = 0; ch < impulse.numberOfChannels; ch++) {
       const data = impulse.getChannelData(ch);
       for (let i = 0; i < length; i++) {
         data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
       }
     }
+    this._reverbImpulseCache.set(key, impulse);
     return impulse;
   }
 
