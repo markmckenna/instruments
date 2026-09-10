@@ -74,7 +74,7 @@ const state = {
   keyIndex: 0, // index into CIRCLE_OF_FIFTHS
   modeIndex: 0, // index into MODES
   globalOctaveShift: 0, // whole octaves, applies on top of every key's own shift below
-  bassEnabled: false, // own toggle (KeyB), independent of mode -- see "Bass toggle" below
+  bassEnabled: true, // own toggle (KeyB), independent of mode -- see "Bass toggle" below; on by default
 };
 
 // Chord buttons are polyphonic: any number can be held at once and all sound
@@ -356,10 +356,25 @@ function changeQuantize(delta) {
 // estimate, rather than requiring exactly four and no more.
 let clickTapTimes = [];
 const TAP_MIN_INTERVAL = 0.15; // seconds -- faster than this isn't a plausible tempo tap
-const TAP_MAX_INTERVAL = 2.5; // seconds -- slower than this and it's two unrelated taps, not a cue
+// Below 80bpm, a gap is too easy to mistake for two separate, unrelated
+// on/off toggles of the click rather than a deliberate steady tap.
+const TAP_MIN_BPM = 80;
+const TAP_MAX_INTERVAL = 60 / TAP_MIN_BPM; // seconds
 function toggleClick() {
-  metronome.toggle();
-  registerClickTap();
+  const tempoWasSet = registerClickTap();
+  // Every tap plays a click immediately, on the app's own audio clock,
+  // rather than however soon the metronome's own lookahead poll would
+  // otherwise get to it -- so a tap that turns the click *off* is still
+  // audible, and you can always hear the tempo you're tapping.
+  engine.playClick();
+  // The tap that actually completes a tempo cue always leaves the click on
+  // (you just set a tempo by ear; hearing it confirmed is the point), same
+  // as any tap that finds the click already off. skipFirstBeat: the manual
+  // click above already covers this instant, so the metronome's own
+  // near-immediate beat-0 tick would otherwise double up audibly a beat
+  // early; its regular ticking still starts from beat 1 as normal.
+  if (tempoWasSet || !metronome.enabled) metronome.enable({ skipFirstBeat: true });
+  else metronome.disable();
   updateUI();
 }
 function registerClickTap() {
@@ -370,14 +385,15 @@ function registerClickTap() {
   const now = performance.now() / 1000;
   clickTapTimes.push(now);
   if (clickTapTimes.length > 4) clickTapTimes.shift();
-  if (clickTapTimes.length < 4) return;
+  if (clickTapTimes.length < 4) return false;
   const gaps = clickTapTimes.slice(1).map((t, i) => t - clickTapTimes[i]);
   if (gaps.some((g) => g < TAP_MIN_INTERVAL || g > TAP_MAX_INTERVAL)) {
     clickTapTimes = [now]; // not a plausible steady tap -- start over from this one
-    return;
+    return false;
   }
   const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
   setBpm(60 / avgGap);
+  return true;
 }
 
 // Holding +/- (or the on-screen bpm buttons) repeats at a fixed typematic

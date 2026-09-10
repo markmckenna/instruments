@@ -20,18 +20,20 @@ export class Metronome {
     this._nextBeat = 0;
   }
 
-  toggle() {
-    if (this.enabled) this.disable();
-    else this.enable();
-    return this.enabled;
-  }
-
-  enable() {
+  /**
+   * `skipFirstBeat`: don't click for beat 0 immediately on enabling -- for a
+   * caller (input.js's toggleClick) that's already playing its own manual
+   * click for this exact instant, so the metronome's own near-immediate
+   * beat-0 tick would otherwise double up audibly a beat early. Regular
+   * ticking still starts from beat 1 as normal, just this first one's
+   * skipped.
+   */
+  enable({ skipFirstBeat = false } = {}) {
     if (this.enabled) return;
     this.engine.unlock(); // ensures ctx exists even if nothing has sounded yet (see AudioEngine.unlock)
     this.enabled = true;
     this._startCtxTime = this.engine.ctx.currentTime;
-    this._nextBeat = 0;
+    this._nextBeat = skipFirstBeat ? 1 : 0;
     this._timer = setInterval(() => this._tick(), TICK_MS);
   }
 

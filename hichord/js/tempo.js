@@ -16,7 +16,7 @@ const MIN_DIVISION = 1; // whole note
 const MAX_DIVISION = 128; // 128th note
 
 export class Tempo {
-  constructor(bpm = 120, quantizeDivision = 32) {
+  constructor(bpm = 120, quantizeDivision = 64) {
     this.bpm = bpm;
     this.quantizeDivision = quantizeDivision;
   }

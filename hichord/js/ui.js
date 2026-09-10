@@ -2,7 +2,7 @@
 // static markup already in index.html (no DOM construction here, so the
 // visual layout lives entirely in HTML/CSS where it's easy to tweak).
 
-import { VARIANTS, NEUTRAL_VARIANT, variantChordName, chordDisplayName } from './theory.js';
+import { VARIANTS, NEUTRAL_VARIANT, variantChordName, chordDisplayName, keyDisplayName } from './theory.js';
 import { midiName } from './audio.js';
 import { CHORD_KEYS, VARIANT_KEYS } from './input.js';
 
@@ -77,8 +77,11 @@ export function renderUI({
     el.classList.toggle('disabled', !variantsApply);
   });
 
+  // Both spellings for an accidental key (e.g. "F♯/G♭" -- see theory.js's
+  // keyDisplayName), since neither reads as more "correct" out of context;
+  // chord buttons themselves stay on a single spelling (chordDisplayName).
   const keyLabel = document.querySelector('[data-display="key"]');
-  if (keyLabel) keyLabel.textContent = key.name;
+  if (keyLabel) keyLabel.textContent = keyDisplayName(key.pc);
 
   const voiceLabel = document.querySelector('[data-display="voice"]');
   if (voiceLabel) voiceLabel.textContent = voice.name;

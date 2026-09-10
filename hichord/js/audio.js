@@ -133,6 +133,14 @@ export const VOICES = [
   },
 ];
 
+// Default voice a fresh AudioEngine starts on -- Warm Pad, per the
+// top-level README's "a little bit of attack/decay" spec (Warm Pad's own
+// attack/decay is the most pronounced of the four). Looked up by name
+// rather than a bare index literal so this stays correct if VOICES is ever
+// reordered; exported so tests/support/expected-audio.js's own default
+// tracks it too instead of hardcoding a second copy.
+export const DEFAULT_VOICE_INDEX = VOICES.findIndex((v) => v.name === 'Warm Pad');
+
 const CLICK_DURATION = 0.02; // seconds -- short enough to read as a click, not a tone
 
 export class AudioEngine {
@@ -141,7 +149,7 @@ export class AudioEngine {
     this.master = null;
     this.limiter = null;
     this.clickBuffer = null; // precomputed noise burst reused by every playClick() -- see unlock()
-    this.voiceIndex = 0;
+    this.voiceIndex = DEFAULT_VOICE_INDEX;
     this.active = new Map(); // voiceId -> array of sounding notes (see _playNote), one entry per polyphonic voice
   }
 

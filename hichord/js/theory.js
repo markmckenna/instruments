@@ -40,6 +40,24 @@ export function pcName(pc) {
   return NOTE_NAMES[((pc % 12) + 12) % 12];
 }
 
+// Alternate (flat) spelling, for keyDisplayName below only -- every other
+// pitch-class name in this app (chord buttons included) stays on the single
+// NOTE_NAMES/pcName spelling; there's no real ambiguity once it's just
+// labeling one specific chord, only when it's naming the key itself.
+const FLAT_NAMES = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭', 'A', 'B♭', 'B'];
+const NATURAL_PCS = new Set([0, 2, 4, 5, 7, 9, 11]); // white keys -- no sharp/flat spelling to disambiguate
+
+/**
+ * Display name for the current *key* (the top-level Key control), not a
+ * chord button: a natural pitch class (no black-key ambiguity) is just its
+ * plain name, same as pcName; an accidental one shows both spellings (e.g.
+ * "F♯/G♭") since neither reads as more "correct" out of context.
+ */
+export function keyDisplayName(pc) {
+  const normalized = ((pc % 12) + 12) % 12;
+  return NATURAL_PCS.has(normalized) ? NOTE_NAMES[normalized] : `${NOTE_NAMES[normalized]}/${FLAT_NAMES[normalized]}`;
+}
+
 // Chord-symbol suffix for each of a diatonic triad's three possible
 // qualities -- the single source of truth for how a plain (no variant, or
 // the neutral variant) triad is labeled, and the base every other variant's

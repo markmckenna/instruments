@@ -65,6 +65,9 @@ export class Arpeggiator {
     this._index = (this._index + 1) % notes.length;
     const note = notes[this._index];
     this.engine.playChord('live', [note]);
-    this.recorder.recordEvent('on', [note]);
+    // exactTime: this step's timing is already exact (see loop.js's
+    // recordEvent), so recording it doesn't need -- and shouldn't get --
+    // the human-timing quantize snap.
+    this.recorder.recordEvent('on', [note], 'main', { exactTime: true });
   }
 }

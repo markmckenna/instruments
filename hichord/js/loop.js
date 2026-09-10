@@ -44,7 +44,17 @@ export class LoopRecorder {
     this.voice = this.engine.voice; // pin to what's selected now -- cycling voices later reshapes only live playing, not this loop
   }
 
-  recordEvent(type, notes, track = 'main') {
+  // `exactTime`: skip quantizing this onset and record its raw elapsed time
+  // instead. For the arpeggiator (see arpeggiator.js), whose steps are
+  // already spaced exactly beatSeconds/4 apart on the same tempo clock the
+  // quantize grid would resolve to anyway, re-quantizing only risks *adding*
+  // error: a coarse-enough grid (or a fast-enough arpeggio relative to it,
+  // e.g. a high bpm) can round two neighboring steps onto the identical
+  // grid line, and a note whose onset collides with the very next note's
+  // onset never gets to sound at all before it's reconciled away -- audible
+  // as a clipped or, at extreme tempos, near-silent step. A hand-played
+  // note's timing has no such guarantee, so this stays quantized by default.
+  recordEvent(type, notes, track = 'main', { exactTime = false } = {}) {
     if (this.state !== 'recording') return;
     // `notes` is always the *complete* set sounding at this instant, not a
     // delta, so playback can run each event through the same playChord()
@@ -55,8 +65,8 @@ export class LoopRecorder {
     let t;
     if (type === 'on') {
       // Quantize the onset itself -- position on the grid is what playing
-      // "in time" means.
-      t = this.tempo.quantize(raw);
+      // "in time" means (unless exactTime, see above).
+      t = exactTime ? raw : this.tempo.quantize(raw);
       this._lastOnShift[track] = t - raw;
     } else {
       // Leave the *release* unquantized: duration is feel, not a grid
