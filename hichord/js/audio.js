@@ -126,16 +126,23 @@ function debugLog(...args) {
  * order (Map preserves insertion order, and re-inserting an existing key
  * moves it there) so the least-recently-used entry is always the first one
  * iterated -- which is exactly what gets evicted, once storing a new miss
- * would grow the cache past EFFECT_CACHE_LIMIT.
+ * would grow the cache past EFFECT_CACHE_LIMIT. `onEvict(value)`, if given,
+ * runs on whatever's evicted -- for a cache of live AudioNodes (see
+ * _sharedReverbConvolver) this is where it actually gets `.disconnect()`ed,
+ * not just dropped from this Map.
  */
-function cached(cache, key, build) {
+function cached(cache, key, build, onEvict) {
   const hit = cache.get(key);
   if (hit !== undefined) {
     cache.delete(key);
     cache.set(key, hit);
     return hit;
   }
-  if (cache.size >= EFFECT_CACHE_LIMIT) cache.delete(cache.keys().next().value);
+  if (cache.size >= EFFECT_CACHE_LIMIT) {
+    const oldestKey = cache.keys().next().value;
+    onEvict?.(cache.get(oldestKey));
+    cache.delete(oldestKey);
+  }
   const value = build();
   cache.set(key, value);
   return value;
@@ -146,7 +153,7 @@ function cached(cache, key, build) {
 // https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/createWaveShaper.
 // `amount` is WebAudio's own informal "k" in that formula (roughly 0 = clean
 // through 100+ = hard clip). Cached by `amount` (rounded) the same way
-// _reverbImpulse caches by decay: the curve is only ever read by a
+// _sharedReverbConvolver caches by decay: the curve is only ever read by a
 // WaveShaperNode, never mutated, so every note wanting the same amount can
 // share one instead of each rebuilding its own.
 function distortionCurve(engine, amount) {
@@ -172,9 +179,9 @@ export class AudioEngine {
     this.clickBuffer = null; // precomputed noise burst reused by every playClick() -- see unlock()
     this.voiceIndex = DEFAULT_VOICE_INDEX;
     this.active = new Map(); // voiceId -> array of sounding notes (see _playNote), one entry per polyphonic voice
-    this._reverbImpulseCache = new Map(); // decaySeconds (rounded, ms) -> AudioBuffer, see _reverbImpulse
+    this._reverbNodeCache = new Map(); // decaySeconds (rounded, ms) -> ConvolverNode, see _sharedReverbConvolver
     this._distortionCurveCache = new Map(); // amount (rounded) -> Float32Array, see distortionCurve
-    this._debugCounts = { notesAttacked: 0, convolversCreated: 0 }; // see AUDIO_DEBUG above
+    this._debugCounts = { notesAttacked: 0, convolversBuilt: 0 }; // see AUDIO_DEBUG above
     if (AUDIO_DEBUG) {
       window.__hichordAudio = this;
       // A safety net for "nothing in the console" reports specifically --
@@ -413,50 +420,71 @@ export class AudioEngine {
   }
 
   /**
-   * Algorithmic reverb: a ConvolverNode fed a synthetic impulse response
-   * instead of a recorded one -- exponentially-decaying white noise makes a
-   * convincing reverb tail on its own, a long-known trick (see
-   * https://github.com/adelespinasse/reverbGen and
-   * https://developer.mozilla.org/en-US/docs/Web/API/ConvolverNode), so no
-   * sample file is needed just to add reverb.
+   * Algorithmic reverb: every note wanting the same `decay` shares one
+   * persistent ConvolverNode (see _sharedReverbConvolver) instead of each
+   * building its own -- convolution is linear, so several notes' signals
+   * summed into one shared convolver produces exactly the same output as
+   * each running through its own independent instance, just without
+   * rebuilding that instance's expensive internal state over and over.
+   * `wet` stays fully per-note (a plain GainNode mix, see _wetDryMix) --
+   * only the convolver itself, the one genuinely expensive part, is shared.
    */
   _createReverbNode(effect, destination) {
-    this._debugCounts.convolversCreated++;
-    debugLog(`convolver #${this._debugCounts.convolversCreated}`, this._debugSnapshot());
-    try {
-      const convolver = this.ctx.createConvolver();
-      convolver.buffer = this._reverbImpulse(this._resolveField(effect.decay));
-      return this._wetDryMix(convolver, convolver, destination, this._resolveField(effect.wet));
-    } catch (err) {
-      console.error('[HiChord audio] building reverb node failed:', err, this._debugSnapshot());
-      throw err;
-    }
+    const convolver = this._sharedReverbConvolver(this._resolveField(effect.decay));
+    return this._wetDryMix(convolver, convolver, destination, this._resolveField(effect.wet));
   }
 
   /**
-   * Cached by decaySeconds (rounded -- see voices.js's reverb docs for why a
-   * randomized `decay` is a bad fit for this): a ConvolverNode's buffer is
-   * only ever read during convolution, never mutated, so every note wanting
-   * the same decay can safely share one impulse instead of each rebuilding
-   * its own from scratch -- a fresh 2-channel, multi-second Float32Array
-   * (hundreds of thousands of Math.random()/Math.pow() calls, allocated and
-   * thrown away) otherwise built synchronously on the main thread for every
-   * single sounding note.
+   * Cached by decaySeconds (rounded -- LRU-capped at EFFECT_CACHE_LIMIT,
+   * with an evicted convolver actually `.disconnect()`ed, not just dropped
+   * from this Map): assigning a ConvolverNode's `buffer` is a real,
+   * synchronous, impulse-length-proportional cost specifically in Chrome
+   * (it builds that instance's own internal convolution engine on the main
+   * thread -- see
+   * https://github.com/WebAudio/web-audio-api/issues/2449), and that engine
+   * is never freed once built. A fresh ConvolverNode per note (this file
+   * used to build one) means one such permanently-live engine per note ever
+   * played, forever, with no bound -- exactly what was crashing Chrome's
+   * audio pipeline after enough notes on a reverb voice (Airy Pad). Reusing
+   * one instance per distinct decay bounds how many of these can ever be
+   * alive at once, regardless of how many notes get played.
    */
-  _reverbImpulse(decaySeconds) {
+  _sharedReverbConvolver(decaySeconds) {
     const key = Math.round(decaySeconds * 1000);
-    return cached(this._reverbImpulseCache, key, () => {
-      const rate = this.ctx.sampleRate;
-      const length = Math.max(1, Math.round(rate * Math.max(decaySeconds, 0.01)));
-      const impulse = this.ctx.createBuffer(2, length, rate);
-      for (let ch = 0; ch < impulse.numberOfChannels; ch++) {
-        const data = impulse.getChannelData(ch);
-        for (let i = 0; i < length; i++) {
-          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
+    return cached(
+      this._reverbNodeCache,
+      key,
+      () => {
+        this._debugCounts.convolversBuilt++;
+        debugLog(`convolver #${this._debugCounts.convolversBuilt} built for decay=${decaySeconds}`, this._debugSnapshot());
+        try {
+          const convolver = this.ctx.createConvolver();
+          convolver.buffer = this._buildReverbImpulse(decaySeconds);
+          return convolver;
+        } catch (err) {
+          console.error('[HiChord audio] building reverb node failed:', err, this._debugSnapshot());
+          throw err;
         }
+      },
+      (evicted) => {
+        debugLog('evicting least-recently-used shared convolver', this._debugSnapshot());
+        evicted.disconnect();
+      },
+    );
+  }
+
+  /** The synthetic stereo impulse response for _sharedReverbConvolver -- exponentially-decaying white noise makes a convincing reverb tail on its own, a long-known trick (see https://github.com/adelespinasse/reverbGen and https://developer.mozilla.org/en-US/docs/Web/API/ConvolverNode), so no sample file is needed just to add reverb. */
+  _buildReverbImpulse(decaySeconds) {
+    const rate = this.ctx.sampleRate;
+    const length = Math.max(1, Math.round(rate * Math.max(decaySeconds, 0.01)));
+    const impulse = this.ctx.createBuffer(2, length, rate);
+    for (let ch = 0; ch < impulse.numberOfChannels; ch++) {
+      const data = impulse.getChannelData(ch);
+      for (let i = 0; i < length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
       }
-      return impulse;
-    });
+    }
+    return impulse;
   }
 
   /**

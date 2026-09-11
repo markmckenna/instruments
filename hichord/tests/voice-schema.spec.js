@@ -226,6 +226,10 @@ test.describe("AudioEngine's envelope/effects graph (fake AudioContext -- no rea
     this.connectedTo.push(target);
   }
 
+  function disconnect() {
+    this.disconnected = true;
+  }
+
   function fakeCtx() {
     const ctx = {
       sampleRate: 44100,
@@ -268,7 +272,7 @@ test.describe("AudioEngine's envelope/effects graph (fake AudioContext -- no rea
       return node;
     };
     ctx.createConvolver = () => {
-      const node = { buffer: null, connect };
+      const node = { buffer: null, connect, disconnect };
       ctx.convolvers.push(node);
       return node;
     };
@@ -528,40 +532,50 @@ test.describe("AudioEngine's envelope/effects graph (fake AudioContext -- no rea
       expect(engine.ctx.shapers[2].curve).not.toBe(engine.ctx.shapers[0].curve); // different amount -> its own
     });
 
-    // Regression: a multi-note chord on a reverb voice (e.g. Airy Pad) used to
-    // rebuild a brand-new multi-second stereo impulse response from scratch
-    // for *every* sounding note. Every note wanting the same decay must
-    // share one impulse instead.
-    test('reverb impulse responses are cached by decay, not rebuilt per note', () => {
+    // Regression: a multi-note chord on a reverb voice (e.g. Airy Pad) used
+    // to build a brand-new ConvolverNode -- Chrome's genuinely expensive
+    // part, not just the impulse data -- for *every* sounding note. Every
+    // note wanting the same decay must share the one live node instead,
+    // which convolution's linearity makes safe: a shared convolver
+    // processing several notes' summed input sounds identical to each
+    // running through its own instance.
+    test('reverb shares one persistent ConvolverNode across notes with the same decay', () => {
       const engine = fakeEngine();
       engine._playNote(60, noteWithEffect({ type: 'reverb', decay: 1, wet: 0.4 }), 0, 1);
       engine._playNote(64, noteWithEffect({ type: 'reverb', decay: 1, wet: 0.4 }), 0, 1);
       engine._playNote(67, noteWithEffect({ type: 'reverb', decay: 1.5, wet: 0.4 }), 0, 1);
 
-      expect(engine.ctx.convolvers).toHaveLength(3); // one ConvolverNode per note, as before
-      // The two notes sharing decay 1 also share the exact same buffer...
-      expect(engine.ctx.convolvers[0].buffer).toBe(engine.ctx.convolvers[1].buffer);
-      // ...while the differently-decayed third note gets its own.
-      expect(engine.ctx.convolvers[2].buffer).not.toBe(engine.ctx.convolvers[0].buffer);
+      // Only 2 ConvolverNodes ever get built -- one per distinct decay, not
+      // one per note -- so the second decay-1 note never called
+      // ctx.createConvolver() again.
+      expect(engine.ctx.convolvers).toHaveLength(2);
+      // Both decay-1 notes' own wet-mix chains feed into that same node...
+      expect(engine.ctx.convolvers[0].connectedTo).toHaveLength(2);
+      // ...while the differently-decayed note got a second, separate node.
+      expect(engine.ctx.convolvers[1].connectedTo).toHaveLength(1);
     });
 
     // Regression: a widely-randomized "base~range" decay (see voices.js's
     // reverb docs) rolls a distinct value basically every note, which would
-    // otherwise grow the cache above by one entry per note for as long as
-    // the session runs. Playing enough distinct decays must evict the
-    // least-recently-used one instead of caching every value ever seen.
-    test('the reverb impulse cache is bounded -- old decays get evicted, not kept forever', () => {
+    // otherwise grow the live-node pool by one permanently-connected
+    // ConvolverNode per note for as long as the session runs -- exactly
+    // what was overwhelming Chrome's audio pipeline. Playing enough
+    // distinct decays must evict (and actually .disconnect()) the
+    // least-recently-used node instead of keeping every one ever built.
+    test('the shared reverb convolver pool is bounded -- old decays get evicted and disconnected', () => {
       const engine = fakeEngine();
       engine._playNote(60, noteWithEffect({ type: 'reverb', decay: 1, wet: 0.4 }), 0, 1);
-      const firstBuffer = engine.ctx.convolvers[0].buffer;
+      const firstConvolver = engine.ctx.convolvers[0];
 
       for (let i = 0; i < 40; i++) {
         engine._playNote(60, noteWithEffect({ type: 'reverb', decay: 2 + i * 0.01, wet: 0.4 }), 0, 1);
       }
 
+      expect(firstConvolver.disconnected).toBe(true); // evicted, and actually freed
+
       engine._playNote(60, noteWithEffect({ type: 'reverb', decay: 1, wet: 0.4 }), 0, 1);
-      const rebuiltBuffer = engine.ctx.convolvers[engine.ctx.convolvers.length - 1].buffer;
-      expect(rebuiltBuffer).not.toBe(firstBuffer); // decay 1 was evicted, so this is a fresh buffer
+      const rebuiltConvolver = engine.ctx.convolvers[engine.ctx.convolvers.length - 1];
+      expect(rebuiltConvolver).not.toBe(firstConvolver); // decay 1 was evicted, so this is a fresh node
     });
 
     test('the distortion curve cache is bounded -- old amounts get evicted, not kept forever', () => {

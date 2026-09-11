@@ -92,11 +92,13 @@ function filterEffectParams(type) {
 //    https://github.com/adelespinasse/reverbGen and
 //    https://developer.mozilla.org/en-US/docs/Web/API/ConvolverNode).
 //    `decay` (seconds) is the tail length, `wet` (0-1) the dry/wet mix.
-//    AudioEngine caches the generated impulse per resolved `decay` value
-//    (see _reverbImpulse) rather than rebuilding it per note, so a "base~range"
-//    `decay` would grow that cache one entry per distinct rolled value for as
-//    long as the session runs -- fine occasionally, but not a param to
-//    randomize with a wide range.
+//    AudioEngine shares one persistent ConvolverNode per resolved `decay`
+//    value across every note wanting it (see _sharedReverbConvolver) rather
+//    than building a new one per note, so a "base~range" `decay` rolls a
+//    distinct one of those live nodes per note -- bounded (the LRU cache
+//    evicts and disconnects the oldest once full), but each genuinely new
+//    value still pays a real, Chrome-specific cost to build, so `decay`
+//    isn't a param to randomize with a wide range.
 //  - tremolo: rhythmic amplitude modulation -- an LFO driving a GainNode, the
 //    classic Web Audio tremolo recipe. `rate` (Hz) and `depth` (0-1, how far
 //    the amplitude dips).
