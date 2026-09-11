@@ -135,3 +135,8 @@ note it in `PROCESS.md` and as a comment in the promoted code itself.
 - Git: work on a feature branch per experiment/change, commit in small
   logical steps with descriptive messages, so the history itself documents
   how the work proceeded.
+- Commit messages routinely quote code identifiers in backticks (e.g.
+  `` `decay` ``) -- passed inline via `git commit -m "..."`, the shell
+  evaluates those as command substitution and silently empties them out of
+  the message. Write the message to a file and commit with `git commit -F
+  <file>` instead whenever it contains backticks.
