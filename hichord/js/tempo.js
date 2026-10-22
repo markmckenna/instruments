@@ -39,19 +39,22 @@ export class Tempo {
     return this.bpm;
   }
 
+  setQuantizeDivision(division) {
+    this.quantizeDivision = Math.min(MAX_DIVISION, Math.max(MIN_DIVISION, division));
+    return this.quantizeDivision;
+  }
+
   // Doubles/halves rather than an arbitrary step: "twice as fine" is the
   // musically meaningful move (matches how note durations themselves
   // relate), and keeps the on-screen control to two buttons.
   /** Halves the quantize grid step (32nd note -> 64th note, finer/more precise). */
   doubleQuantize() {
-    this.quantizeDivision = Math.min(MAX_DIVISION, this.quantizeDivision * 2);
-    return this.quantizeDivision;
+    return this.setQuantizeDivision(this.quantizeDivision * 2);
   }
 
   /** Doubles the quantize grid step (32nd note -> 16th note, coarser/less precise). */
   halveQuantize() {
-    this.quantizeDivision = Math.max(MIN_DIVISION, this.quantizeDivision / 2);
-    return this.quantizeDivision;
+    return this.setQuantizeDivision(this.quantizeDivision / 2);
   }
 
   /** Snap a raw seconds-offset to the nearest quantize grid line. */

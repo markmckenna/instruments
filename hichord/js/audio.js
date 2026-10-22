@@ -262,6 +262,12 @@ export class AudioEngine {
     return this.voice;
   }
 
+  /** Jump straight to a voice index (e.g. restoring a saved preference); out-of-range indices are ignored. */
+  setVoice(index) {
+    if (Number.isInteger(index) && index >= 0 && index < VOICES.length) this.voiceIndex = index;
+    return this.voice;
+  }
+
   _freqFor(midi, octaveOffset) {
     return 440 * Math.pow(2, (midi - 69) / 12) * Math.pow(2, octaveOffset || 0);
   }

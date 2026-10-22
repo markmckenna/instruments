@@ -11,6 +11,7 @@ import { Metronome } from './metronome.js';
 import { Tempo } from './tempo.js';
 import { Arpeggiator } from './arpeggiator.js';
 import { renderUI } from './ui.js';
+import { saveSettings, loadSettings } from './settings.js';
 
 // The 7 chord buttons, in the physical left-to-right order given in the
 // top-level README ("JIKOLP; produce chords ... in that order, starting with
@@ -76,6 +77,44 @@ const state = {
   globalOctaveShift: 0, // whole octaves, applies on top of every key's own shift below
   bassEnabled: true, // own toggle (KeyB), independent of mode -- see "Bass toggle" below; on by default
 };
+
+// Restore whatever persistSettings() below last saved -- anything missing,
+// malformed, or out of range for this build just leaves the default already
+// set above. Deliberately doesn't touch heldBases/keyOctaveShift/keyInversion/
+// lockedModifier/the loop -- those are performance state scoped to a single
+// sitting, not a saved preference (see settings.js).
+const savedSettings = loadSettings();
+if (
+  Number.isInteger(savedSettings.keyIndex) &&
+  savedSettings.keyIndex >= 0 &&
+  savedSettings.keyIndex < CIRCLE_OF_FIFTHS.length
+) {
+  state.keyIndex = savedSettings.keyIndex;
+}
+if (
+  Number.isInteger(savedSettings.modeIndex) &&
+  savedSettings.modeIndex >= 0 &&
+  savedSettings.modeIndex < MODES.length
+) {
+  state.modeIndex = savedSettings.modeIndex;
+}
+if (Number.isInteger(savedSettings.globalOctaveShift)) state.globalOctaveShift = clampOctave(savedSettings.globalOctaveShift);
+if (typeof savedSettings.bassEnabled === 'boolean') state.bassEnabled = savedSettings.bassEnabled;
+if (Number.isInteger(savedSettings.voiceIndex)) engine.setVoice(savedSettings.voiceIndex);
+if (Number.isFinite(savedSettings.bpm)) tempo.setBpm(savedSettings.bpm);
+if (Number.isFinite(savedSettings.quantizeDivision)) tempo.setQuantizeDivision(savedSettings.quantizeDivision);
+
+function persistSettings() {
+  saveSettings({
+    keyIndex: state.keyIndex,
+    modeIndex: state.modeIndex,
+    globalOctaveShift: state.globalOctaveShift,
+    bassEnabled: state.bassEnabled,
+    voiceIndex: engine.voiceIndex,
+    bpm: tempo.bpm,
+    quantizeDivision: tempo.quantizeDivision,
+  });
+}
 
 // Chord buttons are polyphonic: any number can be held at once and all sound
 // together (see currentSound() below), so this is a plain membership list,
@@ -278,7 +317,10 @@ function releaseOctaveKey(code) {
   heldOctaveKeys.splice(idx, 1);
   const targeted = octaveKeyTargetedChord[code];
   delete octaveKeyTargetedChord[code];
-  if (!targeted) state.globalOctaveShift = clampOctave(state.globalOctaveShift + OCTAVE_KEYS[code]);
+  if (!targeted) {
+    state.globalOctaveShift = clampOctave(state.globalOctaveShift + OCTAVE_KEYS[code]);
+    persistSettings();
+  }
   if (heldBases.length) refreshSound();
   else updateUI();
 }
@@ -312,6 +354,7 @@ function toggleLock() {
 // --- Playback mode (Backquote) --------------------------------------------
 function cycleMode() {
   state.modeIndex = (state.modeIndex + 1) % MODES.length;
+  persistSettings();
   refreshSound();
 }
 
@@ -322,31 +365,35 @@ function cycleMode() {
 // cycles through.
 function toggleBass() {
   state.bassEnabled = !state.bassEnabled;
+  persistSettings();
   if (heldBases.length) refreshSound();
   else updateUI();
 }
 
 function changeKey(delta) {
   state.keyIndex = (state.keyIndex + delta + CIRCLE_OF_FIFTHS.length) % CIRCLE_OF_FIFTHS.length;
+  persistSettings();
   if (heldBases.length) refreshSound();
   else updateUI();
 }
 function changeVoice(delta) {
   engine.cycleVoice(delta);
+  persistSettings();
   updateUI();
 }
 function changeBpm(delta) {
-  tempo.setBpm(tempo.bpm + delta);
-  updateUI();
+  setBpm(tempo.bpm + delta);
 }
 /** Set the bpm to an exact value (the typed BPM field, or a tap-tempo cue), rather than nudging it by a step. */
 function setBpm(value) {
   tempo.setBpm(value);
+  persistSettings();
   updateUI();
 }
 function changeQuantize(delta) {
   if (delta > 0) tempo.doubleQuantize();
   else tempo.halveQuantize();
+  persistSettings();
   updateUI();
 }
 

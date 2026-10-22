@@ -322,9 +322,10 @@ audio before a user gesture), not a bug.
 
 - Loop recorder captures one loop at a time; no overdub/multi-track layering
   (you can play live over the loop, but that play isn't added into it).
-- No persistence — reloading the page resets key/voice/octave/mode/bass/
-  loop/tempo/quantize, and every chord button's own inversion/lock/octave
-  state.
+- Key/voice/bpm/quantize/octave/mode/bass are the only settings that survive
+  a reload (saved to a cookie as they change) — the loop and every chord
+  button's own inversion/lock/octave state are scoped to the current sitting
+  and always reset.
 - No MIDI I/O.
 - No on-screen bar-count control — loop length is whatever you actually
   played, snapped to the nearest beat, not a fixed number of bars.
